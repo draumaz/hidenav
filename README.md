@@ -7,6 +7,10 @@ holding the spot where the pill used to be.
 
 Tested on a Pixel 9 running Android 17 (build CP3A.261005.005) with Pixel Launcher.
 
+<p align="center">
+  <img src="docs/screenshots/app.png" width="300" alt="HideNav's main screen: Shizuku connected, with the Hide navigation pill and Keep Circle to Search switches both on">
+</p>
+
 ## Requirements
 
 - A Pixel with gesture navigation
@@ -29,6 +33,10 @@ flag itself (`IStatusBarService.disable`). With it set:
 - swiping up to go home still works, as do swipe-and-hold for Recents and the back gesture
 - Launcher stops accepting long presses on the handle, so Circle to Search no longer opens
   from there
+
+| Pill shown | Pill hidden |
+| :---: | :---: |
+| <img src="docs/screenshots/pill-shown.png" width="360" alt="Bottom of the Pixel Launcher home screen with the white gesture pill below the search bar"> | <img src="docs/screenshots/pill-hidden.png" width="360" alt="The same home screen with HideNav on: the gesture pill is gone"> |
 
 The equivalent from a computer is `adb shell cmd statusbar send-disable-flag home`.
 
