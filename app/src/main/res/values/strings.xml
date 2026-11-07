@@ -1,0 +1,33 @@
+<resources>
+    <string name="app_name">HideNav</string>
+    <string name="subtitle">The gesture pill, gone</string>
+
+    <string name="section_shizuku">Shizuku</string>
+    <string name="shizuku_ready">Connected</string>
+    <string name="shizuku_ready_detail">Running as shell through Shizuku</string>
+    <string name="shizuku_connecting">Connecting…</string>
+    <string name="shizuku_connecting_detail">Starting the shell service</string>
+    <string name="shizuku_permission">Permission needed</string>
+    <string name="shizuku_permission_detail">Tap to allow HideNav in Shizuku</string>
+    <string name="shizuku_not_running">Not running</string>
+    <string name="shizuku_not_running_detail">Start Shizuku or Nightzuku, then come back</string>
+    <string name="shizuku_unsupported">Shizuku is too old</string>
+    <string name="shizuku_unsupported_detail">Update to Shizuku 11 or newer</string>
+
+    <string name="section_navigation">Navigation</string>
+    <string name="hide_pill">Hide navigation pill</string>
+    <string name="hide_pill_detail">Swipe gestures keep working</string>
+    <string name="keep_cts">Keep Circle to Search</string>
+    <string name="keep_cts_detail">Hold where the pill used to be</string>
+    <string name="keep_cts_needs_hide">Only needed while the pill is hidden</string>
+
+    <string name="section_notes">Good to know</string>
+    <string name="note_space_title">Apps still leave room for the bar</string>
+    <string name="note_space">Without root, the system keeps telling apps a 24 dp navigation bar is there. Most apps already draw behind it, so hiding the pill frees the space visually, but an app that pads its own bottom bar will still leave a small gap.</string>
+    <string name="note_shizuku_title">The pill comes back if Shizuku stops</string>
+    <string name="note_shizuku">HideNav reapplies your settings whenever Shizuku starts, including after a reboot.</string>
+    <string name="note_cts_title">Circle to Search takes a moment longer</string>
+    <string name="note_cts">With the pill hidden, Launcher ignores long presses, so HideNav replays one for it. Expect roughly three quarters of a second instead of half.</string>
+
+    <string name="about_version">v%1$s</string>
+</resources>

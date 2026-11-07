@@ -1,0 +1,21 @@
+package io.github.draumaz.hidenav;
+
+// Runs inside Shizuku as the shell UID (2000). See shell/HideNavUserService.kt.
+interface IHideNavService {
+    // Reserved by Shizuku for tearing the service down.
+    void destroy() = 16777114;
+
+    // Hides or shows the gesture pill by holding SystemUI's DISABLE_HOME flag.
+    void setPillHidden(boolean hidden) = 1;
+    boolean isPillHidden() = 2;
+
+    // Replays a long-press on the nav handle so Launcher opens Circle to Search,
+    // lifting the flag just long enough for Launcher to accept the touch.
+    oneway void longPressHandle(float x, float y) = 3;
+
+    // Forwards a tap the touch zone swallowed to whatever sits underneath it.
+    oneway void tap(float x, float y, long delayMs) = 4;
+
+    // Grants this app "display over other apps" so the touch zone can be shown.
+    boolean grantOverlayPermission(String packageName) = 5;
+}

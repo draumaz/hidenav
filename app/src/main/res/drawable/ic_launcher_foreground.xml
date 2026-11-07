@@ -1,0 +1,13 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp" android:height="108dp"
+    android:viewportWidth="108" android:viewportHeight="108">
+    <!-- Phone body -->
+    <path android:fillColor="#DCE2FF"
+        android:pathData="M40,30 h28 a6,6 0 0 1 6,6 v36 a6,6 0 0 1 -6,6 h-28 a6,6 0 0 1 -6,-6 v-36 a6,6 0 0 1 6,-6 z" />
+    <!-- Screen -->
+    <path android:fillColor="#3D5BA9"
+        android:pathData="M41,34 h26 a3,3 0 0 1 3,3 v34 a3,3 0 0 1 -3,3 h-26 a3,3 0 0 1 -3,-3 v-34 a3,3 0 0 1 3,-3 z" />
+    <!-- The pill, faded out -->
+    <path android:fillColor="#00000000" android:strokeColor="#DCE2FF" android:strokeAlpha="0.45"
+        android:strokeWidth="2" android:strokeLineCap="round" android:pathData="M48,69 h12" />
+</vector>
