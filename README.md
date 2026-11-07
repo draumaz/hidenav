@@ -94,6 +94,11 @@ These were tried on the device above and ruled out:
   was removed in Android 11.
 - **Overscan.** `wm overscan` was removed in Android 11. `wm size` only rescales the
   display.
+- **Forcing apps edge-to-edge.** Android 15 added a compat change, `ENFORCE_EDGE_TO_EDGE`,
+  that apps targeting older SDKs could in principle be switched onto. It isn't marked
+  overridable, and `am compat enable ENFORCE_EDGE_TO_EDGE <package>` refuses with "Cannot
+  override a change on a non-debuggable app and user build." It wouldn't remove the gap
+  anyway: edge-to-edge apps still receive the 24 dp inset and usually pad for it.
 - **Feature flags.** Launcher has DeviceConfig flags for tuning the long press, but none
   for hiding the pill or its inset. `aflags` requires root.
 
