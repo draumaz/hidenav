@@ -2,6 +2,7 @@ package io.github.draumaz.hidenav.ui
 
 import android.content.Context
 import android.content.Intent
+import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -39,7 +40,6 @@ import androidx.compose.material3.SwitchDefaults
 import androidx.compose.material3.Text
 import androidx.compose.material3.ripple
 import androidx.compose.material3.toShape
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
@@ -53,7 +53,13 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.semantics.Role
+import androidx.compose.ui.text.LinkAnnotation
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.TextLinkStyles
+import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.withLink
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.graphics.shapes.RoundedPolygon
@@ -134,18 +140,40 @@ fun HomeScreen(bridge: ShellBridge, prefs: Prefs) {
                 ),
             )
 
-            Text(
-                "${stringResource(R.string.app_name)} ${stringResource(R.string.about_version, BuildConfig.VERSION_NAME)}",
-                style = MaterialTheme.typography.labelLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant,
-                textAlign = TextAlign.Center,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 32.dp, bottom = 24.dp),
-            )
+            Footer()
         }
     }
 }
+
+@Composable
+private fun Footer() {
+    val linkStyle = TextLinkStyles(
+        SpanStyle(color = MaterialTheme.colorScheme.primary, textDecoration = TextDecoration.Underline),
+    )
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(top = 32.dp, bottom = 24.dp),
+    ) {
+        Text(
+            "${stringResource(R.string.app_name)} ${stringResource(R.string.about_version, BuildConfig.VERSION_NAME)}",
+            style = MaterialTheme.typography.labelLarge,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center,
+        )
+        Text(
+            buildAnnotatedString {
+                withLink(LinkAnnotation.Url(REPO_URL, linkStyle)) { append(REPO_URL.removePrefix("https://")) }
+            },
+            style = MaterialTheme.typography.labelLarge,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.padding(top = 4.dp),
+        )
+    }
+}
+
+private const val REPO_URL = "https://github.com/draumaz/hidenav"
 
 @Composable
 private fun Header() {
