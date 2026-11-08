@@ -85,60 +85,66 @@ fun HomeScreen(bridge: ShellBridge, prefs: Prefs) {
         Column(
             Modifier
                 .fillMaxSize()
-                .verticalScroll(rememberScrollState())
                 .statusBarsPadding()
                 .navigationBarsPadding()
                 .padding(horizontal = 16.dp),
         ) {
-            Header()
+            // Only scrolls if the content can't fit (e.g. large font scale); the footer stays pinned.
+            Column(
+                Modifier
+                    .weight(1f)
+                    .verticalScroll(rememberScrollState()),
+            ) {
+                Header()
 
-            SectionLabel(stringResource(R.string.section_shizuku))
-            ShizukuRow(state) {
-                when (state) {
-                    ShizukuState.NEEDS_PERMISSION -> bridge.requestPermission()
-                    ShizukuState.NOT_RUNNING -> openShizuku(context)
-                    else -> Unit
+                SectionLabel(stringResource(R.string.section_shizuku))
+                ShizukuRow(state) {
+                    when (state) {
+                        ShizukuState.NEEDS_PERMISSION -> bridge.requestPermission()
+                        ShizukuState.NOT_RUNNING -> openShizuku(context)
+                        else -> Unit
+                    }
                 }
+
+                SectionLabel(stringResource(R.string.section_navigation))
+                SettingRow(
+                    icon = Icons.Rounded.VisibilityOff,
+                    iconShape = MaterialShapes.Cookie7Sided,
+                    title = stringResource(R.string.hide_pill),
+                    subtitle = stringResource(R.string.hide_pill_detail),
+                    shape = segmentShape(0, 2),
+                    enabled = ready,
+                    checked = settings.hidePill,
+                    onCheckedChange = { on ->
+                        toggleFeedback(on)
+                        prefs.update { it.copy(hidePill = on) }
+                    },
+                )
+                SettingRow(
+                    icon = Icons.Rounded.ImageSearch,
+                    iconShape = MaterialShapes.Cookie9Sided,
+                    title = stringResource(R.string.keep_cts),
+                    subtitle = stringResource(
+                        if (settings.hidePill) R.string.keep_cts_detail else R.string.keep_cts_needs_hide
+                    ),
+                    shape = segmentShape(1, 2),
+                    enabled = ready && settings.hidePill,
+                    checked = settings.keepCircleToSearch,
+                    onCheckedChange = { on ->
+                        toggleFeedback(on)
+                        prefs.update { it.copy(keepCircleToSearch = on) }
+                    },
+                )
+
+                SectionLabel(stringResource(R.string.section_notes))
+                NoteCard(
+                    listOf(
+                        R.string.note_space_title to R.string.note_space,
+                        R.string.note_shizuku_title to R.string.note_shizuku,
+                        R.string.note_cts_title to R.string.note_cts,
+                    ),
+                )
             }
-
-            SectionLabel(stringResource(R.string.section_navigation))
-            SettingRow(
-                icon = Icons.Rounded.VisibilityOff,
-                iconShape = MaterialShapes.Cookie7Sided,
-                title = stringResource(R.string.hide_pill),
-                subtitle = stringResource(R.string.hide_pill_detail),
-                shape = segmentShape(0, 2),
-                enabled = ready,
-                checked = settings.hidePill,
-                onCheckedChange = { on ->
-                    toggleFeedback(on)
-                    prefs.update { it.copy(hidePill = on) }
-                },
-            )
-            SettingRow(
-                icon = Icons.Rounded.ImageSearch,
-                iconShape = MaterialShapes.Cookie9Sided,
-                title = stringResource(R.string.keep_cts),
-                subtitle = stringResource(
-                    if (settings.hidePill) R.string.keep_cts_detail else R.string.keep_cts_needs_hide
-                ),
-                shape = segmentShape(1, 2),
-                enabled = ready && settings.hidePill,
-                checked = settings.keepCircleToSearch,
-                onCheckedChange = { on ->
-                    toggleFeedback(on)
-                    prefs.update { it.copy(keepCircleToSearch = on) }
-                },
-            )
-
-            SectionLabel(stringResource(R.string.section_notes))
-            NoteCard(
-                listOf(
-                    R.string.note_space_title to R.string.note_space,
-                    R.string.note_shizuku_title to R.string.note_shizuku,
-                    R.string.note_cts_title to R.string.note_cts,
-                ),
-            )
 
             Footer()
         }
@@ -150,27 +156,20 @@ private fun Footer() {
     val linkStyle = TextLinkStyles(
         SpanStyle(color = MaterialTheme.colorScheme.primary, textDecoration = TextDecoration.Underline),
     )
-    Column(
-        horizontalAlignment = Alignment.CenterHorizontally,
+    val appName = stringResource(R.string.app_name)
+    val version = stringResource(R.string.about_version, BuildConfig.VERSION_NAME)
+    Text(
+        buildAnnotatedString {
+            withLink(LinkAnnotation.Url(REPO_URL, linkStyle)) { append(appName) }
+            append(" $version")
+        },
+        style = MaterialTheme.typography.labelLarge,
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        textAlign = TextAlign.Center,
         modifier = Modifier
             .fillMaxWidth()
-            .padding(top = 32.dp, bottom = 24.dp),
-    ) {
-        Text(
-            "${stringResource(R.string.app_name)} ${stringResource(R.string.about_version, BuildConfig.VERSION_NAME)}",
-            style = MaterialTheme.typography.labelLarge,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-            textAlign = TextAlign.Center,
-        )
-        Text(
-            buildAnnotatedString {
-                withLink(LinkAnnotation.Url(REPO_URL, linkStyle)) { append(REPO_URL.removePrefix("https://")) }
-            },
-            style = MaterialTheme.typography.labelLarge,
-            textAlign = TextAlign.Center,
-            modifier = Modifier.padding(top = 4.dp),
-        )
-    }
+            .padding(top = 12.dp, bottom = 8.dp),
+    )
 }
 
 private const val REPO_URL = "https://github.com/draumaz/hidenav"
@@ -180,7 +179,7 @@ private fun Header() {
     Row(
         Modifier
             .fillMaxWidth()
-            .padding(start = 8.dp, end = 8.dp, top = 20.dp, bottom = 8.dp),
+            .padding(start = 8.dp, end = 8.dp, top = 8.dp, bottom = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
     ) {
         Box(
@@ -238,7 +237,7 @@ private fun SectionLabel(text: String) {
         text,
         style = MaterialTheme.typography.titleSmall,
         color = MaterialTheme.colorScheme.primary,
-        modifier = Modifier.padding(start = 12.dp, top = 20.dp, bottom = 8.dp),
+        modifier = Modifier.padding(start = 12.dp, top = 16.dp, bottom = 8.dp),
     )
 }
 
@@ -277,7 +276,7 @@ private fun SettingRow(
             .padding(bottom = 2.dp)
             .pressScale(interaction),
     ) {
-        Row(rowModifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
+        Row(rowModifier.padding(horizontal = 16.dp, vertical = 14.dp), verticalAlignment = Alignment.CenterVertically) {
             val alpha = if (enabled) 1f else 0.38f
             val badge = if (highlighted) MaterialTheme.colorScheme.primaryContainer else MaterialTheme.colorScheme.secondaryContainer
             val onBadge = if (highlighted) MaterialTheme.colorScheme.onPrimaryContainer else MaterialTheme.colorScheme.onSecondaryContainer
@@ -321,9 +320,9 @@ private fun NoteCard(notes: List<Pair<Int, Int>>) {
         color = MaterialTheme.colorScheme.surfaceBright,
         modifier = Modifier.fillMaxWidth(),
     ) {
-        Column(Modifier.padding(20.dp)) {
+        Column(Modifier.padding(horizontal = 20.dp, vertical = 16.dp)) {
             notes.forEachIndexed { index, (title, body) ->
-                if (index > 0) Spacer(Modifier.height(16.dp))
+                if (index > 0) Spacer(Modifier.height(12.dp))
                 Text(stringResource(title), style = MaterialTheme.typography.titleSmall, color = MaterialTheme.colorScheme.onSurface)
                 Spacer(Modifier.height(2.dp))
                 Text(stringResource(body), style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
