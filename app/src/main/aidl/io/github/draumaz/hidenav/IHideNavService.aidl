@@ -26,6 +26,6 @@ interface IHideNavService {
     float sampleLuminance(int left, int top, int right, int bottom) = 6;
 
     // Starts (or with null, stops) reporting whether an app is in front, for the
-    // "show on home and lock screen" setting. Reports the current state straight away.
+    // "show outside apps" setting. Reports the current state straight away.
     void setForegroundListener(IForegroundListener listener) = 7;
 }

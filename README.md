@@ -48,7 +48,7 @@ running.
 
 ### Showing the pill on the home and lock screen
 
-With "Show on home and lock screen" on, the pill behaves like an iPhone's home indicator:
+With "Show outside apps" on, the pill behaves like an iPhone's home indicator:
 it stays on the home screen, in Recents and on the lock screen, and goes away once you
 open an app. HideNav's service listens for task changes
 (`IActivityTaskManager.registerTaskStackListener`) and for the keyguard locking and
@@ -104,7 +104,7 @@ app's process at perceptible priority, so no foreground notification is needed.
 - **The touch zone is always there** while the feature is on, including in fullscreen
   games and video. Taps get forwarded underneath, but a game that reads holds or drags at
   the very bottom centre of the screen won't see them.
-- **"Show on home and lock screen" needs HideNav's app process.** The service reports
+- **"Show outside apps" needs HideNav's app process.** The service reports
   what's in front to the app, which runs the fade and sets the flag. If Android kills the
   app's process, the pill stays as it was until the app runs again.
 - **It depends on Pixel Launcher's behaviour.** The pill-hiding relies on how Launcher

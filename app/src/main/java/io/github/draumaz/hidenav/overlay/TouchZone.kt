@@ -34,7 +34,7 @@ import kotlin.math.roundToInt
  * real pill's hard one-frame flash. The copy then fades out again. Its colour follows
  * what's behind it, light or dark, the way Launcher picks the real pill's colour.
  *
- * With "show on home and lock screen", [coverPill] reuses that fade when an app opens: the
+ * With "show outside apps", [coverPill] reuses that fade when an app opens: the
  * copy appears over Launcher's still-visible pill, the real one is hidden underneath it,
  * and the copy fades out. On the home screen the strip stays untouchable ([interactive]),
  * so Launcher's own long press works there.

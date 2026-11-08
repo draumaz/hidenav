@@ -6,13 +6,16 @@ import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.foundation.background
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
+import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
@@ -83,86 +86,90 @@ fun HomeScreen(bridge: ShellBridge, prefs: Prefs) {
         haptics.performHapticFeedback(if (on) HapticFeedbackType.ToggleOn else HapticFeedbackType.ToggleOff)
 
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxSize()) {
-        Column(
+        // One scrolling page with the footer at the end. When everything fits, the page
+        // still fills the screen so the footer sits at the bottom.
+        BoxWithConstraints(
             Modifier
                 .fillMaxSize()
                 .statusBarsPadding()
-                .navigationBarsPadding()
-                .padding(horizontal = 16.dp),
+                .navigationBarsPadding(),
         ) {
-            // Only scrolls if the content can't fit (e.g. large font scale); the footer stays pinned.
             Column(
                 Modifier
-                    .weight(1f)
-                    .verticalScroll(rememberScrollState()),
+                    .verticalScroll(rememberScrollState())
+                    .heightIn(min = maxHeight)
+                    .padding(horizontal = 16.dp),
+                verticalArrangement = Arrangement.SpaceBetween,
             ) {
-                Header()
+                Column {
+                    Header()
 
-                SectionLabel(stringResource(R.string.section_shizuku))
-                ShizukuRow(state) {
-                    when (state) {
-                        ShizukuState.NEEDS_PERMISSION -> bridge.requestPermission()
-                        ShizukuState.NOT_RUNNING -> openShizuku(context)
-                        else -> Unit
+                    SectionLabel(stringResource(R.string.section_shizuku))
+                    ShizukuRow(state) {
+                        when (state) {
+                            ShizukuState.NEEDS_PERMISSION -> bridge.requestPermission()
+                            ShizukuState.NOT_RUNNING -> openShizuku(context)
+                            else -> Unit
+                        }
                     }
+
+                    SectionLabel(stringResource(R.string.section_navigation))
+                    SettingRow(
+                        icon = Icons.Rounded.VisibilityOff,
+                        iconShape = MaterialShapes.Cookie7Sided,
+                        title = stringResource(R.string.hide_pill),
+                        subtitle = stringResource(R.string.hide_pill_detail),
+                        shape = segmentShape(0, 3),
+                        enabled = ready,
+                        checked = settings.hidePill,
+                        onCheckedChange = { on ->
+                            toggleFeedback(on)
+                            prefs.update { it.copy(hidePill = on) }
+                        },
+                    )
+                    SettingRow(
+                        icon = Icons.Rounded.Home,
+                        iconShape = MaterialShapes.Cookie6Sided,
+                        title = stringResource(R.string.show_on_home),
+                        subtitle = stringResource(
+                            if (settings.hidePill) R.string.show_on_home_detail else R.string.show_on_home_needs_hide
+                        ),
+                        shape = segmentShape(1, 3),
+                        enabled = ready && settings.hidePill,
+                        checked = settings.showOnHome,
+                        onCheckedChange = { on ->
+                            toggleFeedback(on)
+                            prefs.update { it.copy(showOnHome = on) }
+                        },
+                    )
+                    SettingRow(
+                        icon = Icons.Rounded.ImageSearch,
+                        iconShape = MaterialShapes.Cookie9Sided,
+                        title = stringResource(R.string.keep_cts),
+                        subtitle = stringResource(
+                            if (settings.hidePill) R.string.keep_cts_detail else R.string.keep_cts_needs_hide
+                        ),
+                        shape = segmentShape(2, 3),
+                        enabled = ready && settings.hidePill,
+                        checked = settings.keepCircleToSearch,
+                        onCheckedChange = { on ->
+                            toggleFeedback(on)
+                            prefs.update { it.copy(keepCircleToSearch = on) }
+                        },
+                    )
+
+                    SectionLabel(stringResource(R.string.section_notes))
+                    NoteCard(
+                        listOf(
+                            R.string.note_space_title to R.string.note_space,
+                            R.string.note_shizuku_title to R.string.note_shizuku,
+                            R.string.note_cts_title to R.string.note_cts,
+                        ),
+                    )
                 }
 
-                SectionLabel(stringResource(R.string.section_navigation))
-                SettingRow(
-                    icon = Icons.Rounded.VisibilityOff,
-                    iconShape = MaterialShapes.Cookie7Sided,
-                    title = stringResource(R.string.hide_pill),
-                    subtitle = stringResource(R.string.hide_pill_detail),
-                    shape = segmentShape(0, 3),
-                    enabled = ready,
-                    checked = settings.hidePill,
-                    onCheckedChange = { on ->
-                        toggleFeedback(on)
-                        prefs.update { it.copy(hidePill = on) }
-                    },
-                )
-                SettingRow(
-                    icon = Icons.Rounded.Home,
-                    iconShape = MaterialShapes.Cookie6Sided,
-                    title = stringResource(R.string.show_on_home),
-                    subtitle = stringResource(
-                        if (settings.hidePill) R.string.show_on_home_detail else R.string.show_on_home_needs_hide
-                    ),
-                    shape = segmentShape(1, 3),
-                    enabled = ready && settings.hidePill,
-                    checked = settings.showOnHome,
-                    onCheckedChange = { on ->
-                        toggleFeedback(on)
-                        prefs.update { it.copy(showOnHome = on) }
-                    },
-                )
-                SettingRow(
-                    icon = Icons.Rounded.ImageSearch,
-                    iconShape = MaterialShapes.Cookie9Sided,
-                    title = stringResource(R.string.keep_cts),
-                    subtitle = stringResource(
-                        if (settings.hidePill) R.string.keep_cts_detail else R.string.keep_cts_needs_hide
-                    ),
-                    shape = segmentShape(2, 3),
-                    enabled = ready && settings.hidePill,
-                    checked = settings.keepCircleToSearch,
-                    onCheckedChange = { on ->
-                        toggleFeedback(on)
-                        prefs.update { it.copy(keepCircleToSearch = on) }
-                    },
-                )
-
-                SectionLabel(stringResource(R.string.section_notes))
-                NoteCard(
-                    listOf(
-                        R.string.note_space_title to R.string.note_space,
-                        R.string.note_shizuku_title to R.string.note_shizuku,
-                        R.string.note_cts_title to R.string.note_cts,
-                    ),
-                )
+                Footer()
             }
-
-            Footer()
         }
     }
 }
@@ -174,10 +181,14 @@ private fun Footer() {
     )
     val appName = stringResource(R.string.app_name)
     val version = stringResource(R.string.about_version, BuildConfig.VERSION_NAME)
+    val author = stringResource(R.string.about_author, AUTHOR)
     Text(
         buildAnnotatedString {
             withLink(LinkAnnotation.Url(REPO_URL, linkStyle)) { append(appName) }
-            append(" $version")
+            append(" $version\n")
+            val start = length + author.indexOf(AUTHOR)
+            append(author)
+            addLink(LinkAnnotation.Url(AUTHOR_URL, linkStyle), start, start + AUTHOR.length)
         },
         style = MaterialTheme.typography.labelLarge,
         color = MaterialTheme.colorScheme.onSurfaceVariant,
@@ -189,6 +200,8 @@ private fun Footer() {
 }
 
 private const val REPO_URL = "https://github.com/draumaz/hidenav"
+private const val AUTHOR = "draumaz"
+private const val AUTHOR_URL = "https://github.com/draumaz"
 
 @Composable
 private fun Header() {

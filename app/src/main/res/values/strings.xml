@@ -17,7 +17,7 @@
     <string name="section_navigation">Navigation</string>
     <string name="hide_pill">Hide navigation pill</string>
     <string name="hide_pill_detail">Swipe gestures keep working</string>
-    <string name="show_on_home">Show on home and lock screen</string>
+    <string name="show_on_home">Show outside apps</string>
     <string name="show_on_home_detail">Fades out when you open an app</string>
     <string name="show_on_home_needs_hide">Only applies while the pill is hidden</string>
     <string name="keep_cts">Keep Circle to Search</string>
@@ -32,5 +32,6 @@
     <string name="note_cts_title">Circle to Search takes a moment longer</string>
     <string name="note_cts">With the pill hidden, Launcher ignores long presses, so HideNav replays one for it. Expect about two thirds of a second instead of half.</string>
 
-    <string name="about_version">v%1$s</string>
+    <string name="about_version" translatable="false">v%1$s</string>
+    <string name="about_author">by %1$s</string>
 </resources>

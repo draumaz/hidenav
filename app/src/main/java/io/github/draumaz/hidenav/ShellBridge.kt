@@ -37,7 +37,7 @@ class ShellBridge(private val context: Context, private val prefs: Prefs) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val touchZone = TouchZone(context) { _service.value }
 
-    /** From the shell service, while "show on home and lock screen" is on. */
+    /** From the shell service, while "show outside apps" is on. */
     private val appInFront = MutableStateFlow(true)
     private val foregroundListener = object : IForegroundListener.Stub() {
         override fun onAppInFrontChanged(appInFront: Boolean) {
