@@ -149,8 +149,11 @@ class TouchZone(
         const val TAG = "HideNavZone"
         /** Wide enough to cover the pill (about 108 dp) with some margin either side. */
         const val ZONE_WIDTH_DP = 180
-        /** Our part of the hold; Launcher's 450 ms long-press timer runs after this. */
-        const val HOLD_MS = 250L
+        /**
+         * Our part of the hold; Launcher's 450 ms long-press timer runs after this. Swipes
+         * get pilfered well before it, and a tap held longer than this opens Circle to Search.
+         */
+        const val HOLD_MS = 150L
         const val TAP_DELAY_MS = 60L
         const val REPLAY_GUARD_MS = 1200L
     }

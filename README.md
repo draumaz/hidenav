@@ -59,11 +59,11 @@ pill's old spot:
 1. Launcher watches the bottom edge through an input monitor. That runs in parallel with
    normal touch delivery, so a swipe that starts in the zone still works: Launcher claims
    the pointer and the zone gets a cancel.
-2. If a touch stays still for 250 ms, HideNav's service lifts the flag, waits 100 ms for
-   Launcher to see the change, and replays a long press at the same spot. Launcher's own
-   long-press timeout (450 ms) then runs from the replayed press, and it opens Circle to
-   Search the normal way. The flag goes back on 250 ms into the replay, which doesn't
-   interrupt it.
+2. If a touch stays still for 150 ms, HideNav's service lifts the flag, waits 25 ms for
+   Launcher to see the change, and replays a long press at the same spot. Launcher picks
+   how to handle a touch when it starts, so the flag goes straight back on and the pill
+   only flashes for a frame or two. Launcher's own long-press timeout (450 ms) then runs
+   from the replayed press, and it opens Circle to Search the normal way.
 3. A quick tap in the zone is forwarded to whatever is underneath. The zone becomes
    untouchable for a moment and the tap is re-injected.
 
@@ -78,8 +78,10 @@ app's process at perceptible priority, so no foreground notification is needed.
   edge-to-edge (most of them, since Android 15 enforces it for apps targeting SDK 35 and
   later) already draw behind the pill, so the space is freed visually. An app that pads its
   own bottom bar for the inset will still leave a gap.
-- **Circle to Search is slower.** It opens after about 800 ms of holding instead of about
+- **Circle to Search is slower.** It opens after about 650 ms of holding instead of about
   450 ms, because HideNav's hold detection runs before Launcher's own timer starts.
+  Launcher's timer is a DeviceConfig flag (`launcher/LPNH_TIMEOUT_MS`) that the shell user
+  isn't allowed to change on Android 17.
 - **The touch zone is always there** while the feature is on, including in fullscreen
   games and video. Taps get forwarded underneath, but a game that reads holds or drags at
   the very bottom centre of the screen won't see them.

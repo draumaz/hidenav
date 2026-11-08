@@ -54,14 +54,15 @@ class HideNavUserService : IHideNavService.Stub() {
         replaying = true
         // Launcher picks its input consumer on ACTION_DOWN from the SystemUI state at that
         // moment, and refuses nav-handle long presses while home is disabled. So: lift the
-        // flag, give SystemUI -> Launcher a moment to see it, replay the press, then hide
-        // the pill again once Launcher has committed to the long press. Launcher's own
-        // timeout (450 ms, DeviceConfig launcher/LPNH_TIMEOUT_MS) runs from the replayed DOWN.
+        // flag, give SystemUI -> Launcher a moment to see it, replay the press, and hide the
+        // pill again straight away: once the consumer is chosen, Launcher doesn't re-check
+        // the flag. Launcher's own timeout (450 ms, DeviceConfig launcher/LPNH_TIMEOUT_MS,
+        // which the shell isn't allowed to change) runs from the replayed DOWN.
         applyFlag(false)
         handler.postDelayed({
             val down = SystemClock.uptimeMillis()
             injectTouch(down, down, MotionEvent.ACTION_DOWN, x, y)
-            handler.postDelayed({ if (hidden) applyFlag(true) }, RESTORE_AFTER_MS)
+            if (hidden) applyFlag(true)
             handler.postDelayed({
                 injectTouch(down, SystemClock.uptimeMillis(), MotionEvent.ACTION_UP, x, y)
                 replaying = false
@@ -111,8 +112,12 @@ class HideNavUserService : IHideNavService.Stub() {
         const val DISABLE_HOME = 0x00200000
         /** InputManager.INJECT_INPUT_EVENT_MODE_ASYNC */
         const val INJECT_MODE_ASYNC = 0
-        const val PROPAGATE_MS = 100L
-        const val RESTORE_AFTER_MS = 250L
+        /**
+         * Head start for the lifted flag to reach Launcher before the replayed DOWN does.
+         * On a Pixel 9 (Android 17) even 0 ms worked, but only by winning that race; this
+         * keeps a margin. It's also roughly how long the pill flashes.
+         */
+        const val PROPAGATE_MS = 25L
         const val RELEASE_AFTER_MS = 650L
     }
 }

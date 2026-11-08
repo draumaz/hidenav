@@ -27,7 +27,7 @@
     <string name="note_shizuku_title">The pill comes back if Shizuku stops</string>
     <string name="note_shizuku">HideNav reapplies your settings whenever Shizuku starts, including after a reboot.</string>
     <string name="note_cts_title">Circle to Search takes a moment longer</string>
-    <string name="note_cts">With the pill hidden, Launcher ignores long presses, so HideNav replays one for it. Expect roughly three quarters of a second instead of half.</string>
+    <string name="note_cts">With the pill hidden, Launcher ignores long presses, so HideNav replays one for it. Expect about two thirds of a second instead of half.</string>
 
     <string name="about_version">v%1$s</string>
 </resources>
