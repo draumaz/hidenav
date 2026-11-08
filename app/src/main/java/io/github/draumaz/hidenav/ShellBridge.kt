@@ -37,6 +37,19 @@ class ShellBridge(private val context: Context, private val prefs: Prefs) {
     private val scope = CoroutineScope(SupervisorJob() + Dispatchers.Main.immediate)
     private val touchZone = TouchZone(context) { _service.value }
 
+    /** From the shell service, while "show on home and lock screen" is on. */
+    private val appInFront = MutableStateFlow(true)
+    private val foregroundListener = object : IForegroundListener.Stub() {
+        override fun onAppInFrontChanged(appInFront: Boolean) {
+            main.post { this@ShellBridge.appInFront.value = appInFront }
+        }
+    }
+    /** The service [foregroundListener] is registered with, if any. */
+    private var listeningTo: IHideNavService? = null
+    /** Whether the pill should be hidden right now; checked again once [TouchZone.coverPill] is done. */
+    private var wantHidden = false
+    private var covering = false
+
     private val args = Shizuku.UserServiceArgs(ComponentName(context, HideNavUserService::class.java))
         // Daemon: the service (and with it the hidden pill) outlives this app's process.
         .daemon(true)
@@ -70,8 +83,8 @@ class ShellBridge(private val context: Context, private val prefs: Prefs) {
             if (result == PackageManager.PERMISSION_GRANTED) main.post(::refresh)
         }
         scope.launch {
-            combine(_service, prefs.settings) { service, settings -> service to settings }
-                .collect { (service, settings) -> apply(service, settings) }
+            combine(_service, prefs.settings, appInFront) { service, settings, inFront -> Triple(service, settings, inFront) }
+                .collect { (service, settings, appInFront) -> apply(service, settings, appInFront) }
         }
     }
 
@@ -94,21 +107,63 @@ class ShellBridge(private val context: Context, private val prefs: Prefs) {
         }
     }
 
-    private fun apply(service: IHideNavService?, settings: Settings) {
+    private fun apply(service: IHideNavService?, settings: Settings, appInFront: Boolean) {
         if (service == null) {
+            listeningTo = null
+            wantHidden = false
             touchZone.hide()
             return
         }
-        try {
-            if (service.isPillHidden != settings.hidePill) service.setPillHidden(settings.hidePill)
-        } catch (e: Exception) {
-            Log.w(TAG, "setPillHidden failed", e)
+        val showOnHome = settings.hidePill && settings.showOnHome
+        if (showOnHome != (listeningTo === service)) {
+            try {
+                service.setForegroundListener(if (showOnHome) foregroundListener else null)
+                listeningTo = if (showOnHome) service else null
+                // Until the service reports, treat it like before: hidden everywhere.
+                if (!showOnHome) this.appInFront.value = true
+            } catch (e: Exception) {
+                Log.w(TAG, "setForegroundListener failed", e)
+            }
         }
-        // The touch zone only matters while the pill (and Launcher's own long press) is gone.
-        if (settings.hidePill && settings.keepCircleToSearch && ensureOverlayPermission(service)) {
+        val hide = settings.hidePill && (!showOnHome || appInFront)
+        wantHidden = hide
+
+        // The strip draws the hand-over animation, and with Circle to Search kept it takes
+        // touches too, but only while the pill (and Launcher's own long press) is gone.
+        touchZone.interactive = hide && settings.keepCircleToSearch
+        if ((showOnHome || (settings.hidePill && settings.keepCircleToSearch)) && ensureOverlayPermission(service)) {
             touchZone.show()
         } else {
             touchZone.hide()
+        }
+
+        if (!hide) touchZone.uncover()
+        val hidden = try {
+            service.isPillHidden
+        } catch (e: Exception) {
+            Log.w(TAG, "isPillHidden failed", e)
+            return
+        }
+        when {
+            hide == hidden -> Unit
+            // Going into an app: fade the pill out the way a Circle to Search hold ends.
+            hide && showOnHome -> if (!covering) {
+                covering = true
+                touchZone.coverPill {
+                    covering = false
+                    if (wantHidden && _service.value === service) setPillHidden(service, true)
+                }
+            }
+            hide -> setPillHidden(service, true)
+            else -> setPillHidden(service, false)
+        }
+    }
+
+    private fun setPillHidden(service: IHideNavService, hidden: Boolean) {
+        try {
+            service.setPillHidden(hidden)
+        } catch (e: Exception) {
+            Log.w(TAG, "setPillHidden failed", e)
         }
     }
 

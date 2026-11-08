@@ -1,5 +1,7 @@
 package io.github.draumaz.hidenav;
 
+import io.github.draumaz.hidenav.IForegroundListener;
+
 // Runs inside Shizuku as the shell UID (2000). See shell/HideNavUserService.kt.
 interface IHideNavService {
     // Reserved by Shizuku for tearing the service down.
@@ -22,4 +24,8 @@ interface IHideNavService {
     // Average luminance (0..1) of a screen rectangle, or -1 if it can't be captured.
     // Lets the touch zone pick the same light/dark pill colour Launcher would.
     float sampleLuminance(int left, int top, int right, int bottom) = 6;
+
+    // Starts (or with null, stops) reporting whether an app is in front, for the
+    // "show on home and lock screen" setting. Reports the current state straight away.
+    void setForegroundListener(IForegroundListener listener) = 7;
 }

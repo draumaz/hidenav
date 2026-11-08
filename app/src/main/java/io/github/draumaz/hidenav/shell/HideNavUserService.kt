@@ -7,12 +7,16 @@ import android.os.Binder
 import android.os.Handler
 import android.os.HandlerThread
 import android.os.IBinder
+import android.os.Parcel
+import android.os.RemoteException
 import android.os.SystemClock
 import android.util.Log
 import android.view.InputDevice
 import android.view.InputEvent
 import android.view.MotionEvent
+import io.github.draumaz.hidenav.IForegroundListener
 import io.github.draumaz.hidenav.IHideNavService
+import java.lang.reflect.Proxy
 import kotlin.system.exitProcess
 
 /**
@@ -39,7 +43,15 @@ class HideNavUserService : IHideNavService.Stub() {
     private val inject by lazy {
         input.javaClass.getMethod("injectInputEvent", InputEvent::class.java, Int::class.java)
     }
-    private val capture by lazy { DisplayCapture(service("window", "android.view.IWindowManager")) }
+    private val windowManager: Any by lazy { service("window", "android.view.IWindowManager") }
+    private val activityTasks: Any by lazy { service("activity_task", "android.app.IActivityTaskManager") }
+    private val capture by lazy { DisplayCapture(windowManager) }
+
+    // Only touched on [handler]'s thread.
+    private var foregroundListener: IForegroundListener? = null
+    private var reportedAppInFront: Boolean? = null
+    private var watching = false
+    private val recheck = Runnable { checkForeground() }
 
     override fun destroy() {
         runCatching { applyFlag(false) }
@@ -96,6 +108,100 @@ class HideNavUserService : IHideNavService.Stub() {
         Log.w(TAG, "sampleLuminance failed", t)
         -1f
     }
+
+    override fun setForegroundListener(listener: IForegroundListener?) {
+        handler.post {
+            foregroundListener = listener
+            reportedAppInFront = null
+            if (listener != null) {
+                startWatching()
+                checkForeground()
+            }
+        }
+    }
+
+    /**
+     * Listens for task changes (an app opening, going home) and the keyguard locking or
+     * unlocking. Both callbacks just trigger a fresh look at the current state, so the
+     * listeners don't need to decode any arguments. They stay registered for the life of
+     * this process; with no [foregroundListener] they cost one cheap check per event.
+     */
+    private fun startWatching() {
+        if (watching) return
+        watching = true
+        val onEvent: () -> Unit = {
+            handler.removeCallbacks(recheck)
+            handler.post(recheck)
+        }
+        runCatching {
+            method(activityTasks, "registerTaskStackListener")
+                .invoke(activityTasks, eventListener("android.app.ITaskStackListener", onEvent))
+        }.onFailure { Log.w(TAG, "registerTaskStackListener failed", it) }
+        runCatching {
+            method(windowManager, "addKeyguardLockedStateListener").invoke(
+                windowManager,
+                eventListener("com.android.internal.policy.IKeyguardLockedStateListener", onEvent),
+            )
+        }.onFailure { Log.w(TAG, "addKeyguardLockedStateListener failed", it) }
+    }
+
+    private fun checkForeground() {
+        val listener = foregroundListener ?: return
+        val appInFront = try {
+            !isKeyguardLocked() && !isHomeInFront()
+        } catch (t: Throwable) {
+            Log.w(TAG, "foreground check failed", t)
+            return
+        }
+        if (appInFront == reportedAppInFront) return
+        reportedAppInFront = appInFront
+        Log.d(TAG, "appInFront=$appInFront")
+        try {
+            listener.onAppInFrontChanged(appInFront)
+        } catch (e: RemoteException) {
+            // The app's process is gone; it registers again when it comes back.
+            foregroundListener = null
+        }
+    }
+
+    private fun isKeyguardLocked(): Boolean =
+        method(windowManager, "isKeyguardLocked").invoke(windowManager) as Boolean
+
+    /** Whether the focused task is Launcher's home or Recents, rather than an app. */
+    private fun isHomeInFront(): Boolean {
+        val info = method(activityTasks, "getFocusedRootTaskInfo").invoke(activityTasks) ?: return false
+        val type = info.javaClass.getField("topActivityType").getInt(info)
+        return type == ACTIVITY_TYPE_HOME || type == ACTIVITY_TYPE_RECENTS
+    }
+
+    /**
+     * A stand-in for a hidden oneway AIDL listener interface: a plain Binder that runs
+     * [onEvent] for every call, wrapped in a proxy of the interface so the hidden
+     * register method accepts it (its Stub.Proxy only needs asBinder()).
+     */
+    private fun eventListener(iface: String, onEvent: () -> Unit): Any {
+        val binder = object : Binder() {
+            override fun onTransact(code: Int, data: Parcel, reply: Parcel?, flags: Int): Boolean {
+                if (code in FIRST_CALL_TRANSACTION..LAST_CALL_TRANSACTION) {
+                    onEvent()
+                    return true
+                }
+                return super.onTransact(code, data, reply, flags)
+            }
+        }
+        val type = Class.forName(iface)
+        return Proxy.newProxyInstance(type.classLoader, arrayOf(type)) { proxy, m, args ->
+            when (m.name) {
+                "asBinder" -> binder
+                "hashCode" -> System.identityHashCode(proxy)
+                "equals" -> proxy === args?.firstOrNull()
+                "toString" -> "HideNav $iface"
+                else -> null
+            }
+        }
+    }
+
+    private fun method(target: Any, name: String) = target.javaClass.methods.first { it.name == name }
 
     private fun applyFlag(hide: Boolean) {
         disable.invoke(statusBar, if (hide) DISABLE_HOME else 0, token, SHELL_PACKAGE)
@@ -166,6 +272,9 @@ class HideNavUserService : IHideNavService.Stub() {
     private companion object {
         const val TAG = "HideNavShell"
         const val DEFAULT_DISPLAY = 0
+        /** WindowConfiguration.ACTIVITY_TYPE_HOME and _RECENTS. */
+        const val ACTIVITY_TYPE_HOME = 2
+        const val ACTIVITY_TYPE_RECENTS = 3
         const val SHELL_PACKAGE = "com.android.shell"
         /** StatusBarManager.DISABLE_HOME: Launcher fades the stashed handle out while it's set. */
         const val DISABLE_HOME = 0x00200000

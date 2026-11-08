@@ -26,6 +26,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Check
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.ErrorOutline
+import androidx.compose.material.icons.rounded.Home
 import androidx.compose.material.icons.rounded.HourglassTop
 import androidx.compose.material.icons.rounded.ImageSearch
 import androidx.compose.material.icons.rounded.Key
@@ -112,12 +113,27 @@ fun HomeScreen(bridge: ShellBridge, prefs: Prefs) {
                     iconShape = MaterialShapes.Cookie7Sided,
                     title = stringResource(R.string.hide_pill),
                     subtitle = stringResource(R.string.hide_pill_detail),
-                    shape = segmentShape(0, 2),
+                    shape = segmentShape(0, 3),
                     enabled = ready,
                     checked = settings.hidePill,
                     onCheckedChange = { on ->
                         toggleFeedback(on)
                         prefs.update { it.copy(hidePill = on) }
+                    },
+                )
+                SettingRow(
+                    icon = Icons.Rounded.Home,
+                    iconShape = MaterialShapes.Cookie6Sided,
+                    title = stringResource(R.string.show_on_home),
+                    subtitle = stringResource(
+                        if (settings.hidePill) R.string.show_on_home_detail else R.string.show_on_home_needs_hide
+                    ),
+                    shape = segmentShape(1, 3),
+                    enabled = ready && settings.hidePill,
+                    checked = settings.showOnHome,
+                    onCheckedChange = { on ->
+                        toggleFeedback(on)
+                        prefs.update { it.copy(showOnHome = on) }
                     },
                 )
                 SettingRow(
@@ -127,7 +143,7 @@ fun HomeScreen(bridge: ShellBridge, prefs: Prefs) {
                     subtitle = stringResource(
                         if (settings.hidePill) R.string.keep_cts_detail else R.string.keep_cts_needs_hide
                     ),
-                    shape = segmentShape(1, 2),
+                    shape = segmentShape(2, 3),
                     enabled = ready && settings.hidePill,
                     checked = settings.keepCircleToSearch,
                     onCheckedChange = { on ->

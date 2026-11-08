@@ -17,6 +17,9 @@
     <string name="section_navigation">Navigation</string>
     <string name="hide_pill">Hide navigation pill</string>
     <string name="hide_pill_detail">Swipe gestures keep working</string>
+    <string name="show_on_home">Show on home and lock screen</string>
+    <string name="show_on_home_detail">Fades out when you open an app</string>
+    <string name="show_on_home_needs_hide">Only applies while the pill is hidden</string>
     <string name="keep_cts">Keep Circle to Search</string>
     <string name="keep_cts_detail">Hold where the pill used to be</string>
     <string name="keep_cts_needs_hide">Only needed while the pill is hidden</string>

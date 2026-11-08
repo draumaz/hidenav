@@ -46,6 +46,21 @@ comes back, so a crash can't leave you stuck without one. HideNav reapplies your
 whenever Shizuku hands it a binder again, which includes after a reboot once Shizuku is
 running.
 
+### Showing the pill on the home and lock screen
+
+With "Show on home and lock screen" on, the pill behaves like an iPhone's home indicator:
+it stays on the home screen, in Recents and on the lock screen, and goes away once you
+open an app. HideNav's service listens for task changes
+(`IActivityTaskManager.registerTaskStackListener`) and for the keyguard locking and
+unlocking (`IWindowManager.addKeyguardLockedStateListener`). It counts an app as in front
+when the keyguard isn't locked and the focused task isn't home or Recents. The flag is
+only set while an app is in front.
+
+When an app opens, the pill fades out the same way it does after a Circle to Search hold.
+HideNav samples Launcher's pill to get its colour, draws an opaque copy on top of it, sets
+the flag underneath, and fades the copy out. On the home screen the touch zone is
+untouchable, so Launcher handles long presses there itself.
+
 ### Keeping Circle to Search
 
 The shell user can't start Circle to Search directly:
@@ -89,6 +104,9 @@ app's process at perceptible priority, so no foreground notification is needed.
 - **The touch zone is always there** while the feature is on, including in fullscreen
   games and video. Taps get forwarded underneath, but a game that reads holds or drags at
   the very bottom centre of the screen won't see them.
+- **"Show on home and lock screen" needs HideNav's app process.** The service reports
+  what's in front to the app, which runs the fade and sets the flag. If Android kills the
+  app's process, the pill stays as it was until the app runs again.
 - **It depends on Pixel Launcher's behaviour.** The pill-hiding relies on how Launcher
   handles the Home-disabled state, and Circle to Search relies on Launcher's long-press
   handling. A Launcher update could change either.
