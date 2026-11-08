@@ -1,0 +1,34 @@
+<resources>
+    <string name="subtitle">Полоска жестов, которой нет</string>
+
+    <string name="shizuku_ready">Подключено</string>
+    <string name="shizuku_ready_detail">Работает от имени shell через Shizuku</string>
+    <string name="shizuku_connecting">Подключение…</string>
+    <string name="shizuku_connecting_detail">Запуск службы shell</string>
+    <string name="shizuku_permission">Нужно разрешение</string>
+    <string name="shizuku_permission_detail">Нажмите, чтобы разрешить HideNav в Shizuku</string>
+    <string name="shizuku_not_running">Не запущен</string>
+    <string name="shizuku_not_running_detail">Запустите Shizuku или Nightzuku и вернитесь</string>
+    <string name="shizuku_unsupported">Shizuku устарел</string>
+    <string name="shizuku_unsupported_detail">Обновите Shizuku до версии 11 или новее</string>
+
+    <string name="section_navigation">Навигация</string>
+    <string name="hide_pill">Скрыть полоску навигации</string>
+    <string name="hide_pill_detail">Жесты продолжают работать</string>
+    <string name="show_on_home">Показывать вне приложений</string>
+    <string name="show_on_home_detail">Исчезает, когда вы открываете приложение</string>
+    <string name="show_on_home_needs_hide">Действует, только когда полоска скрыта</string>
+    <string name="keep_cts">Сохранить «Обвести и найти»</string>
+    <string name="keep_cts_detail">Удерживайте там, где была полоска</string>
+    <string name="keep_cts_needs_hide">Нужно, только когда полоска скрыта</string>
+
+    <string name="section_notes">Полезно знать</string>
+    <string name="note_space_title">Приложения всё равно оставляют место под панель</string>
+    <string name="note_space">Без root система продолжает сообщать приложениям о панели навигации высотой 24 dp. Большинство приложений и так рисуют под ней, поэтому после скрытия полоски место освобождается визуально, но приложение, которое само добавляет отступ под свою нижнюю панель, всё равно оставит небольшой зазор.</string>
+    <string name="note_shizuku_title">Полоска возвращается, если Shizuku остановлен</string>
+    <string name="note_shizuku">HideNav заново применяет ваши настройки при каждом запуске Shizuku, в том числе после перезагрузки.</string>
+    <string name="note_cts_title">«Обвести и найти» открывается чуть дольше</string>
+    <string name="note_cts">Когда полоска скрыта, Launcher не реагирует на долгое нажатие, поэтому HideNav воспроизводит его за вас. Ждать придётся около двух третей секунды вместо половины.</string>
+
+    <string name="about_author">автор: %1$s</string>
+</resources>
