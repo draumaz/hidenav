@@ -62,8 +62,10 @@ pill's old spot:
 2. If a touch stays still for 150 ms, HideNav's service lifts the flag, waits 25 ms for
    Launcher to see the change, and replays a long press at the same spot. Launcher picks
    how to handle a touch when it starts, so the flag goes straight back on and the pill
-   only flashes for a frame or two. Launcher's own long-press timeout (450 ms) then runs
-   from the replayed press, and it opens Circle to Search the normal way.
+   only flashes for a frame or two. To hide even that, the zone fades in its own copy of
+   the pill during the hold, so it's already there when Launcher's flashes, and fades it
+   out again afterwards. Launcher's own long-press timeout (450 ms) then runs from the
+   replayed press, and it opens Circle to Search the normal way.
 3. A quick tap in the zone is forwarded to whatever is underneath. The zone becomes
    untouchable for a moment and the tap is re-injected.
 

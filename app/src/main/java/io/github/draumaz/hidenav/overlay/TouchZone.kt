@@ -2,6 +2,8 @@ package io.github.draumaz.hidenav.overlay
 
 import android.annotation.SuppressLint
 import android.content.Context
+import android.graphics.Canvas
+import android.graphics.Paint
 import android.graphics.PixelFormat
 import android.os.Handler
 import android.os.Looper
@@ -25,6 +27,10 @@ import kotlin.math.roundToInt
  *    Launcher turns into Circle to Search.
  *  - Taps: re-injected underneath with the strip made untouchable for a moment, so apps
  *    with something clickable at the very bottom still get it.
+ *
+ * During a hold the strip draws its own copy of the pill and fades it in, so it's already
+ * fully visible when the replay briefly un-hides Launcher's real pill. That hides the
+ * real pill's hard one-frame flash. The copy then fades out again.
  *
  * A visible overlay window also keeps this process at perceptible priority, so no
  * foreground-service notification is needed to keep the strip alive.
@@ -99,11 +105,36 @@ class TouchZone(
         /** Set while our own replayed long press is in flight, so we ignore its events. */
         private var replaying = false
 
+        private val density = resources.displayMetrics.density
+        private val pillWidth = PILL_WIDTH_DP * density
+        private val pillHeight = PILL_HEIGHT_DP * density
+        private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = PILL_COLOR }
+
+        init {
+            alpha = 0f
+        }
+
+        private val fadeIn = Runnable { animate().alpha(1f).setDuration(FADE_IN_MS).start() }
+        private val fadeOut = Runnable {
+            main.removeCallbacks(fadeIn)
+            animate().alpha(0f).setDuration(FADE_OUT_MS).start()
+        }
+
         private val hold = Runnable {
             tracking = false
             replaying = true
             service()?.runCatching { longPressHandle(downX, downY) }
+            // Keep our pill up until Launcher's real one has flashed and gone again.
+            main.postDelayed(fadeOut, PILL_DWELL_MS)
             main.postDelayed({ replaying = false }, REPLAY_GUARD_MS)
+        }
+
+        override fun onDraw(canvas: Canvas) {
+            // Same size and place as Launcher's pill: centred in the navigation bar area.
+            val left = (width - pillWidth) / 2
+            val top = (height - pillHeight) / 2
+            val radius = pillHeight / 2
+            canvas.drawRoundRect(left, top, left + pillWidth, top + pillHeight, radius, radius, pillPaint)
         }
 
         @SuppressLint("ClickableViewAccessibility")
@@ -114,6 +145,8 @@ class TouchZone(
                     downX = event.rawX
                     downY = event.rawY
                     tracking = true
+                    main.removeCallbacks(fadeOut)
+                    main.postDelayed(fadeIn, FADE_IN_DELAY_MS)
                     main.postDelayed(hold, HOLD_MS)
                 }
                 MotionEvent.ACTION_MOVE -> if (tracking &&
@@ -122,14 +155,19 @@ class TouchZone(
                     // A swipe: Launcher will pilfer it. Stop treating it as a hold.
                     tracking = false
                     main.removeCallbacks(hold)
+                    fadeOut.run()
                 }
                 MotionEvent.ACTION_UP -> {
                     main.removeCallbacks(hold)
-                    if (tracking) passThroughTap(event.rawX, event.rawY)
+                    if (tracking) {
+                        fadeOut.run()
+                        passThroughTap(event.rawX, event.rawY)
+                    }
                     tracking = false
                 }
                 MotionEvent.ACTION_CANCEL -> {
                     main.removeCallbacks(hold)
+                    if (tracking) fadeOut.run()
                     tracking = false
                 }
             }
@@ -156,5 +194,23 @@ class TouchZone(
         const val HOLD_MS = 150L
         const val TAP_DELAY_MS = 60L
         const val REPLAY_GUARD_MS = 1200L
+
+        /**
+         * Pixel Launcher's phone pill is 108 x 4 dp. Its colour (taskbar_stashed_handle_light_color)
+         * is #EBFFFFFF, but ours is opaque: two translucent pills stacked during the real flash
+         * would show up as a brighter blip.
+         */
+        const val PILL_WIDTH_DP = 108
+        const val PILL_HEIGHT_DP = 4
+        const val PILL_COLOR = 0xFFFFFFFF.toInt()
+        /**
+         * The fade-in starts a little into the hold so quick taps mostly show nothing, and
+         * finishes just before [HOLD_MS], when the real pill is about to flash.
+         */
+        const val FADE_IN_DELAY_MS = 40L
+        const val FADE_IN_MS = 100L
+        /** How long after the replay starts our pill stays up. The real flash is about 30 ms. */
+        const val PILL_DWELL_MS = 150L
+        const val FADE_OUT_MS = 200L
     }
 }
