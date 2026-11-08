@@ -78,8 +78,9 @@ app's process at perceptible priority, so no foreground notification is needed.
   edge-to-edge (most of them, since Android 15 enforces it for apps targeting SDK 35 and
   later) already draw behind the pill, so the space is freed visually. An app that pads its
   own bottom bar for the inset will still leave a gap.
-- **Circle to Search is slower.** It opens after about 650 ms of holding instead of about
-  450 ms, because HideNav's hold detection runs before Launcher's own timer starts.
+- **Circle to Search takes slightly longer.** It opens after about 640 ms of holding
+  instead of about 450 ms, because HideNav's hold detection runs before Launcher's own
+  timer starts. The pill shows for about 30 ms while the press is replayed.
   Launcher's timer is a DeviceConfig flag (`launcher/LPNH_TIMEOUT_MS`) that the shell user
   isn't allowed to change on Android 17.
 - **The touch zone is always there** while the feature is on, including in fullscreen
