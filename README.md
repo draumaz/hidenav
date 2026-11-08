@@ -64,7 +64,8 @@ pill's old spot:
    how to handle a touch when it starts, so the flag goes straight back on and the pill
    only flashes for a frame or two. To hide even that, the zone fades in its own copy of
    the pill during the hold, so it's already there when Launcher's flashes, and fades it
-   out again afterwards. Launcher's own long-press timeout (450 ms) then runs from the
+   out again afterwards. Like Launcher, it picks a light or dark pill from what's behind
+   it, which the shell user can sample through `IWindowManager.captureDisplay`. Launcher's own long-press timeout (450 ms) then runs from the
    replayed press, and it opens Circle to Search the normal way.
 3. A quick tap in the zone is forwarded to whatever is underneath. The zone becomes
    untouchable for a moment and the tap is re-injected.

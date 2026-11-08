@@ -18,4 +18,8 @@ interface IHideNavService {
 
     // Grants this app "display over other apps" so the touch zone can be shown.
     boolean grantOverlayPermission(String packageName) = 5;
+
+    // Average luminance (0..1) of a screen rectangle, or -1 if it can't be captured.
+    // Lets the touch zone pick the same light/dark pill colour Launcher would.
+    float sampleLuminance(int left, int top, int right, int bottom) = 6;
 }

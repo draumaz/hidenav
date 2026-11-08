@@ -1,5 +1,8 @@
 package io.github.draumaz.hidenav.shell
 
+import android.graphics.Bitmap
+import android.graphics.Color
+import android.graphics.Rect
 import android.os.Binder
 import android.os.Handler
 import android.os.HandlerThread
@@ -36,6 +39,7 @@ class HideNavUserService : IHideNavService.Stub() {
     private val inject by lazy {
         input.javaClass.getMethod("injectInputEvent", InputEvent::class.java, Int::class.java)
     }
+    private val capture by lazy { DisplayCapture(service("window", "android.view.IWindowManager")) }
 
     override fun destroy() {
         runCatching { applyFlag(false) }
@@ -83,6 +87,16 @@ class HideNavUserService : IHideNavService.Stub() {
             .redirectErrorStream(true).start().waitFor() == 0
     }.getOrDefault(false)
 
+    override fun sampleLuminance(left: Int, top: Int, right: Int, bottom: Int): Float = try {
+        val start = SystemClock.uptimeMillis()
+        capture.luminance(Rect(left, top, right, bottom)).also {
+            Log.d(TAG, "sampleLuminance=$it in ${SystemClock.uptimeMillis() - start} ms")
+        }
+    } catch (t: Throwable) {
+        Log.w(TAG, "sampleLuminance failed", t)
+        -1f
+    }
+
     private fun applyFlag(hide: Boolean) {
         disable.invoke(statusBar, if (hide) DISABLE_HOME else 0, token, SHELL_PACKAGE)
     }
@@ -105,8 +119,53 @@ class HideNavUserService : IHideNavService.Stub() {
         return Class.forName("$iface\$Stub").getMethod("asInterface", IBinder::class.java).invoke(null, binder)!!
     }
 
+    /**
+     * Captures part of the screen through IWindowManager.captureDisplay, which the shell may
+     * call because it holds READ_FRAME_BUFFER. Written against Android 17's
+     * android.window.ScreenCaptureInternal; Launcher samples the same area to choose its
+     * pill colour.
+     */
+    private class DisplayCapture(private val windowManager: Any) {
+        private val internal = Class.forName("android.window.ScreenCaptureInternal")
+        private val argsBuilder = Class.forName("android.window.ScreenCaptureInternal\$CaptureArgs\$Builder")
+        private val argsClass = Class.forName("android.window.ScreenCaptureInternal\$CaptureArgs")
+        private val listenerClass = Class.forName("android.window.ScreenCaptureInternal\$ScreenCaptureListener")
+        private val syncListenerClass =
+            Class.forName("android.window.ScreenCaptureInternal\$SynchronousScreenCaptureListener")
+        private val bufferClass = Class.forName("android.window.ScreenCaptureInternal\$ScreenshotHardwareBuffer")
+        private val captureDisplay = windowManager.javaClass.getMethod(
+            "captureDisplay", Int::class.java, argsClass, listenerClass,
+        )
+
+        fun luminance(crop: Rect): Float {
+            val builder = argsBuilder.getConstructor().newInstance()
+            argsBuilder.getMethod("setSourceCrop", Rect::class.java).invoke(builder, crop)
+            val args = argsBuilder.getMethod("build").invoke(builder)
+            val listener = internal.getMethod("createSyncCaptureListener").invoke(null)
+            captureDisplay.invoke(windowManager, DEFAULT_DISPLAY, args, listener)
+            val buffer = syncListenerClass.getMethod("getBuffer").invoke(listener)
+                ?: error("no buffer")
+            try {
+                val hardware = bufferClass.getMethod("asBitmap").invoke(buffer) as Bitmap
+                val bitmap = hardware.copy(Bitmap.Config.ARGB_8888, false)
+                hardware.recycle()
+                val pixels = IntArray(bitmap.width * bitmap.height)
+                bitmap.getPixels(pixels, 0, bitmap.width, 0, 0, bitmap.width, bitmap.height)
+                bitmap.recycle()
+                // Rec. 709 luma on the encoded values, as SurfaceFlinger's region sampling
+                // (and so Launcher's pill colour) uses.
+                return pixels.map {
+                    (0.2126f * Color.red(it) + 0.7152f * Color.green(it) + 0.0722f * Color.blue(it)) / 255f
+                }.average().toFloat()
+            } finally {
+                bufferClass.getMethod("close").invoke(buffer)
+            }
+        }
+    }
+
     private companion object {
         const val TAG = "HideNavShell"
+        const val DEFAULT_DISPLAY = 0
         const val SHELL_PACKAGE = "com.android.shell"
         /** StatusBarManager.DISABLE_HOME: Launcher fades the stashed handle out while it's set. */
         const val DISABLE_HOME = 0x00200000

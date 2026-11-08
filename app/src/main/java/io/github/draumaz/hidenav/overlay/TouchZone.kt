@@ -14,6 +14,7 @@ import android.view.View
 import android.view.ViewConfiguration
 import android.view.WindowManager
 import io.github.draumaz.hidenav.IHideNavService
+import java.util.concurrent.Executors
 import kotlin.math.abs
 import kotlin.math.roundToInt
 
@@ -30,7 +31,8 @@ import kotlin.math.roundToInt
  *
  * During a hold the strip draws its own copy of the pill and fades it in, so it's already
  * fully visible when the replay briefly un-hides Launcher's real pill. That hides the
- * real pill's hard one-frame flash. The copy then fades out again.
+ * real pill's hard one-frame flash. The copy then fades out again. Its colour follows
+ * what's behind it, light or dark, the way Launcher picks the real pill's colour.
  *
  * A visible overlay window also keeps this process at perceptible priority, so no
  * foreground-service notification is needed to keep the strip alive.
@@ -41,6 +43,8 @@ class TouchZone(
 ) {
     private val windowManager = context.getSystemService(WindowManager::class.java)
     private val main = Handler(Looper.getMainLooper())
+    /** Screen sampling is a blocking binder call into the shell service; keep it off main. */
+    private val sampler = Executors.newSingleThreadExecutor()
     private var view: View? = null
     private val params by lazy { layoutParams() }
 
@@ -50,6 +54,9 @@ class TouchZone(
         try {
             windowManager.addView(zone, params)
             view = zone
+            // The first capture is slow (reflection, graphics setup in the shell process).
+            // Do it now so the first hold gets its colour in time.
+            sampler.execute { service()?.runCatching { sampleLuminance(0, 0, 1, 1) } }
         } catch (e: Exception) {
             Log.w(TAG, "addView failed", e)
         }
@@ -108,7 +115,8 @@ class TouchZone(
         private val density = resources.displayMetrics.density
         private val pillWidth = PILL_WIDTH_DP * density
         private val pillHeight = PILL_HEIGHT_DP * density
-        private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = PILL_COLOR }
+        private val pillPaint = Paint(Paint.ANTI_ALIAS_FLAG).apply { color = PILL_LIGHT }
+        private val location = IntArray(2)
 
         init {
             alpha = 0f
@@ -137,6 +145,31 @@ class TouchZone(
             canvas.drawRoundRect(left, top, left + pillWidth, top + pillHeight, radius, radius, pillPaint)
         }
 
+        /**
+         * Checks what's behind the pill and picks its colour like Launcher does: a light pill
+         * over dark content, a dark one over light content. Runs while our copy is still
+         * invisible, so it doesn't sample itself. If sampling fails, the last colour stays.
+         */
+        private fun matchLauncherColour() {
+            val shell = service() ?: return
+            getLocationOnScreen(location)
+            val left = location[0] + ((width - pillWidth) / 2).roundToInt()
+            val top = location[1] + ((height - pillHeight) / 2).roundToInt()
+            val right = left + pillWidth.roundToInt()
+            val bottom = top + pillHeight.roundToInt()
+            sampler.execute {
+                val luma = runCatching { shell.sampleLuminance(left, top, right, bottom) }.getOrDefault(-1f)
+                if (luma < 0) return@execute
+                main.post {
+                    val colour = if (luma < LUMINANCE_THRESHOLD) PILL_LIGHT else PILL_DARK
+                    if (pillPaint.color != colour) {
+                        pillPaint.color = colour
+                        invalidate()
+                    }
+                }
+            }
+        }
+
         @SuppressLint("ClickableViewAccessibility")
         override fun onTouchEvent(event: MotionEvent): Boolean {
             if (replaying) return true
@@ -146,6 +179,7 @@ class TouchZone(
                     downY = event.rawY
                     tracking = true
                     main.removeCallbacks(fadeOut)
+                    if (alpha == 0f) matchLauncherColour()
                     main.postDelayed(fadeIn, FADE_IN_DELAY_MS)
                     main.postDelayed(hold, HOLD_MS)
                 }
@@ -196,13 +230,16 @@ class TouchZone(
         const val REPLAY_GUARD_MS = 1200L
 
         /**
-         * Pixel Launcher's phone pill is 108 x 4 dp. Its colour (taskbar_stashed_handle_light_color)
-         * is #EBFFFFFF, but ours is opaque: two translucent pills stacked during the real flash
-         * would show up as a brighter blip.
+         * Pixel Launcher's phone pill is 108 x 4 dp. Its colours (taskbar_stashed_handle_light_color
+         * and _dark_color) are #EBFFFFFF and #99000000, but ours are opaque: two translucent
+         * pills stacked during the real flash would show up as a blip.
          */
         const val PILL_WIDTH_DP = 108
         const val PILL_HEIGHT_DP = 4
-        const val PILL_COLOR = 0xFFFFFFFF.toInt()
+        const val PILL_LIGHT = 0xFFFFFFFF.toInt()
+        const val PILL_DARK = 0xFF000000.toInt()
+        /** SystemUI's region sampling threshold: below this the area counts as dark. */
+        const val LUMINANCE_THRESHOLD = 0.5f
         /**
          * The fade-in starts a little into the hold so quick taps mostly show nothing, and
          * finishes just before [HOLD_MS], when the real pill is about to flash.
