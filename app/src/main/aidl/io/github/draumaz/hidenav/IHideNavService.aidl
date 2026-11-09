@@ -28,4 +28,9 @@ interface IHideNavService {
     // Starts (or with null, stops) reporting whether an app is in front, for the
     // "show outside apps" setting. Reports the current state straight away.
     void setForegroundListener(IForegroundListener listener) = 7;
+
+    // Keeps the app's process coming back: if appToken's process dies (Android kills it
+    // freely while the lock screen hides the touch zone), the service restarts it in the
+    // background once the device is unlocked. With null, stops doing that.
+    void watchApp(IBinder appToken, String packageName) = 8;
 }

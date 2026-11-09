@@ -46,6 +46,10 @@ class ShellBridge(private val context: Context, private val prefs: Prefs) {
     }
     /** The service [foregroundListener] is registered with, if any. */
     private var listeningTo: IHideNavService? = null
+    /** Handed to the service so it can tell when this process dies and restart it. */
+    private val appToken = android.os.Binder()
+    /** The service that's watching [appToken], if any. */
+    private var watchedBy: IHideNavService? = null
     /** Whether the pill should be hidden right now; checked again once [TouchZone.coverPill] is done. */
     private var wantHidden = false
     private var covering = false
@@ -110,11 +114,24 @@ class ShellBridge(private val context: Context, private val prefs: Prefs) {
     private fun apply(service: IHideNavService?, settings: Settings, appInFront: Boolean) {
         if (service == null) {
             listeningTo = null
+            watchedBy = null
             wantHidden = false
             touchZone.hide()
             return
         }
         val showOnHome = settings.hidePill && settings.showOnHome
+        // This process only matters while it has the touch zone up. The overlay keeps it at
+        // perceptible priority, but the lock screen hides the overlay, and then Android
+        // kills it like any cached app. Have the service bring it back after unlock.
+        val needed = showOnHome || (settings.hidePill && settings.keepCircleToSearch)
+        if (needed != (watchedBy === service)) {
+            try {
+                service.watchApp(if (needed) appToken else null, context.packageName)
+                watchedBy = if (needed) service else null
+            } catch (e: Exception) {
+                Log.w(TAG, "watchApp failed", e)
+            }
+        }
         if (showOnHome != (listeningTo === service)) {
             try {
                 service.setForegroundListener(if (showOnHome) foregroundListener else null)

@@ -51,7 +51,20 @@ class HideNavUserService : IHideNavService.Stub() {
     private var foregroundListener: IForegroundListener? = null
     private var reportedAppInFront: Boolean? = null
     private var watching = false
-    private val recheck = Runnable { checkForeground() }
+    private val recheck = Runnable {
+        checkForeground()
+        if (appDied) scheduleRespawn()
+    }
+
+    // The app process, from [watchApp]. Only touched on [handler]'s thread.
+    private var appToken: IBinder? = null
+    private var appDeath: IBinder.DeathRecipient? = null
+    private var appPackage: String? = null
+    private var appAttachedAt = 0L
+    /** The watched app's process died and hasn't been restarted yet. */
+    private var appDied = false
+    private var respawnDelayMs = RESPAWN_MIN_MS
+    private val respawn = Runnable { respawnApp() }
 
     override fun destroy() {
         runCatching { applyFlag(false) }
@@ -119,6 +132,89 @@ class HideNavUserService : IHideNavService.Stub() {
             }
         }
     }
+
+    override fun watchApp(appToken: IBinder?, packageName: String?) {
+        handler.post {
+            val old = this.appToken
+            val oldDeath = appDeath
+            if (old != null && oldDeath != null) runCatching { old.unlinkToDeath(oldDeath, 0) }
+            this.appToken = null
+            appDeath = null
+            appDied = false
+            handler.removeCallbacks(respawn)
+            if (appToken == null || packageName == null) {
+                appPackage = null
+                return@post
+            }
+            appPackage = packageName
+            appAttachedAt = SystemClock.elapsedRealtime()
+            val death = IBinder.DeathRecipient { handler.post { onAppDied(appToken) } }
+            this.appToken = appToken
+            appDeath = death
+            startWatching()
+            try {
+                appToken.linkToDeath(death, 0)
+            } catch (e: RemoteException) {
+                onAppDied(appToken)
+            }
+        }
+    }
+
+    private fun onAppDied(token: IBinder) {
+        if (appToken !== token) return
+        appToken = null
+        appDeath = null
+        appDied = true
+        // A process that ran a while was killed for memory; one that died straight after a
+        // restart is probably crashing, so back off instead of restarting it in a loop.
+        respawnDelayMs = if (SystemClock.elapsedRealtime() - appAttachedAt > STABLE_MS) {
+            RESPAWN_MIN_MS
+        } else {
+            (respawnDelayMs * 2).coerceAtMost(RESPAWN_MAX_MS)
+        }
+        Log.d(TAG, "app died; restarting it in $respawnDelayMs ms once unlocked")
+        scheduleRespawn()
+    }
+
+    /** Restarts the app after [respawnDelayMs], or waits for the next unlock (via [recheck]). */
+    private fun scheduleRespawn() {
+        if (handler.hasCallbacks(respawn)) return
+        val locked = runCatching { isKeyguardLocked() }.getOrDefault(false)
+        if (!locked) handler.postDelayed(respawn, respawnDelayMs)
+    }
+
+    private fun respawnApp() {
+        val pkg = appPackage ?: return
+        if (!appDied || runCatching { isKeyguardLocked() }.getOrDefault(false)) return
+        if (isForceStopped(pkg)) {
+            // The user stopped it on purpose; it registers again when they open it.
+            Log.d(TAG, "app was force-stopped; not restarting it")
+            appDied = false
+            appPackage = null
+            return
+        }
+        // Touching the app's Shizuku provider starts its process in the background, without
+        // an activity. The app then reconnects and calls watchApp again.
+        val ok = runCatching {
+            ProcessBuilder("content", "call", "--uri", "content://$pkg.shizuku", "--method", "hidenav_wake")
+                .redirectErrorStream(true).start().waitFor() == 0
+        }.getOrDefault(false)
+        Log.d(TAG, "restarted app: $ok")
+        if (ok) {
+            appDied = false
+            appAttachedAt = SystemClock.elapsedRealtime()
+        } else {
+            respawnDelayMs = (respawnDelayMs * 2).coerceAtMost(RESPAWN_MAX_MS)
+            scheduleRespawn()
+        }
+    }
+
+    private fun isForceStopped(pkg: String): Boolean = runCatching {
+        val pm = service("package", "android.content.pm.IPackageManager")
+        val userId = android.os.UserHandle::class.java.getMethod("myUserId").invoke(null) as Int
+        pm.javaClass.getMethod("isPackageStoppedForUser", String::class.java, Int::class.java)
+            .invoke(pm, pkg, userId) as Boolean
+    }.onFailure { Log.w(TAG, "isPackageStoppedForUser failed", it) }.getOrDefault(false)
 
     /**
      * Listens for task changes (an app opening, going home) and the keyguard locking or
@@ -276,6 +372,10 @@ class HideNavUserService : IHideNavService.Stub() {
         const val ACTIVITY_TYPE_HOME = 2
         const val ACTIVITY_TYPE_RECENTS = 3
         const val SHELL_PACKAGE = "com.android.shell"
+        const val RESPAWN_MIN_MS = 500L
+        const val RESPAWN_MAX_MS = 5 * 60_000L
+        /** An app process that lived this long wasn't crashing. */
+        const val STABLE_MS = 60_000L
         /** StatusBarManager.DISABLE_HOME: Launcher fades the stashed handle out while it's set. */
         const val DISABLE_HOME = 0x00200000
         /** InputManager.INJECT_INPUT_EVENT_MODE_ASYNC */
