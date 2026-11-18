@@ -46,6 +46,13 @@ class HideNavUserService : IHideNavService.Stub() {
     private val windowManager: Any by lazy { service("window", "android.view.IWindowManager") }
     private val activityTasks: Any by lazy { service("activity_task", "android.app.IActivityTaskManager") }
     private val capture by lazy { DisplayCapture(windowManager) }
+    // Looked up once: Class.getMethods() copies the whole (large) method table on every call,
+    // and these run on every task change and keyguard event.
+    private val isKeyguardLockedMethod by lazy { method(windowManager, "isKeyguardLocked") }
+    private val focusedRootTaskInfoMethod by lazy { method(activityTasks, "getFocusedRootTaskInfo") }
+    private val topActivityTypeField by lazy {
+        Class.forName("android.app.TaskInfo").getField("topActivityType")
+    }
 
     // Only touched on [handler]'s thread.
     private var foregroundListener: IForegroundListener? = null
@@ -289,12 +296,12 @@ class HideNavUserService : IHideNavService.Stub() {
     }
 
     private fun isKeyguardLocked(): Boolean =
-        method(windowManager, "isKeyguardLocked").invoke(windowManager) as Boolean
+        isKeyguardLockedMethod.invoke(windowManager) as Boolean
 
     /** Whether the focused task is Launcher's home or Recents, rather than an app. */
     private fun isHomeInFront(): Boolean {
-        val info = method(activityTasks, "getFocusedRootTaskInfo").invoke(activityTasks) ?: return false
-        val type = info.javaClass.getField("topActivityType").getInt(info)
+        val info = focusedRootTaskInfoMethod.invoke(activityTasks) ?: return false
+        val type = topActivityTypeField.getInt(info)
         return type == ACTIVITY_TYPE_HOME || type == ACTIVITY_TYPE_RECENTS
     }
 
@@ -366,17 +373,23 @@ class HideNavUserService : IHideNavService.Stub() {
         private val captureDisplay = windowManager.javaClass.getMethod(
             "captureDisplay", Int::class.java, argsClass, listenerClass,
         )
+        private val newBuilder = argsBuilder.getConstructor()
+        private val setSourceCrop = argsBuilder.getMethod("setSourceCrop", Rect::class.java)
+        private val build = argsBuilder.getMethod("build")
+        private val createSyncCaptureListener = internal.getMethod("createSyncCaptureListener")
+        private val getBuffer = syncListenerClass.getMethod("getBuffer")
+        private val asBitmap = bufferClass.getMethod("asBitmap")
+        private val close = bufferClass.getMethod("close")
 
         fun luminance(crop: Rect): Float {
-            val builder = argsBuilder.getConstructor().newInstance()
-            argsBuilder.getMethod("setSourceCrop", Rect::class.java).invoke(builder, crop)
-            val args = argsBuilder.getMethod("build").invoke(builder)
-            val listener = internal.getMethod("createSyncCaptureListener").invoke(null)
+            val builder = newBuilder.newInstance()
+            setSourceCrop.invoke(builder, crop)
+            val args = build.invoke(builder)
+            val listener = createSyncCaptureListener.invoke(null)
             captureDisplay.invoke(windowManager, DEFAULT_DISPLAY, args, listener)
-            val buffer = syncListenerClass.getMethod("getBuffer").invoke(listener)
-                ?: error("no buffer")
+            val buffer = getBuffer.invoke(listener) ?: error("no buffer")
             try {
-                val hardware = bufferClass.getMethod("asBitmap").invoke(buffer) as Bitmap
+                val hardware = asBitmap.invoke(buffer) as Bitmap
                 val bitmap = hardware.copy(Bitmap.Config.ARGB_8888, false)
                 hardware.recycle()
                 val pixels = IntArray(bitmap.width * bitmap.height)
@@ -384,11 +397,15 @@ class HideNavUserService : IHideNavService.Stub() {
                 bitmap.recycle()
                 // Rec. 709 luma on the encoded values, as SurfaceFlinger's region sampling
                 // (and so Launcher's pill colour) uses.
-                return pixels.map {
-                    (0.2126f * Color.red(it) + 0.7152f * Color.green(it) + 0.0722f * Color.blue(it)) / 255f
-                }.average().toFloat()
+                // A plain loop: map/average would box every pixel.
+                if (pixels.isEmpty()) error("empty capture")
+                var sum = 0.0
+                for (px in pixels) {
+                    sum += 0.2126f * Color.red(px) + 0.7152f * Color.green(px) + 0.0722f * Color.blue(px)
+                }
+                return (sum / pixels.size / 255.0).toFloat()
             } finally {
-                bufferClass.getMethod("close").invoke(buffer)
+                close.invoke(buffer)
             }
         }
     }

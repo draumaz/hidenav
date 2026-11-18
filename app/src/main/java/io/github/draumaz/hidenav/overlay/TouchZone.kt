@@ -170,8 +170,19 @@ class TouchZone(
             alpha = 0f
         }
 
+        // A single opaque shape: fading it needs no offscreen layer.
+        override fun hasOverlappingRendering() = false
+
+        /**
+         * Deferred from ACTION_DOWN: a screen capture makes SurfaceFlinger render an extra
+         * pass, and doing that at the start of every home or back swipe competes with
+         * Launcher's gesture animation. Most swipes are pilfered before this runs.
+         */
+        private val sample = Runnable { if (alpha == 0f) sampleColour(realPillShowing = false) }
+
         private val fadeIn = Runnable { animate().alpha(1f).setDuration(FADE_IN_MS).start() }
         private val fadeOut = Runnable {
+            main.removeCallbacks(sample)
             main.removeCallbacks(fadeIn)
             animate().alpha(0f).setDuration(FADE_OUT_MS).start()
         }
@@ -205,6 +216,7 @@ class TouchZone(
         }
 
         private fun cancelFades() {
+            main.removeCallbacks(sample)
             main.removeCallbacks(fadeIn)
             main.removeCallbacks(fadeOut)
             main.removeCallbacks(handOver)
@@ -268,7 +280,7 @@ class TouchZone(
                     downY = event.rawY
                     tracking = true
                     main.removeCallbacks(fadeOut)
-                    if (alpha == 0f) sampleColour(realPillShowing = false)
+                    main.postDelayed(sample, SAMPLE_DELAY_MS)
                     main.postDelayed(fadeIn, FADE_IN_DELAY_MS)
                     main.postDelayed(hold, HOLD_MS)
                 }
@@ -334,6 +346,8 @@ class TouchZone(
          * finishes just before [HOLD_MS], when the real pill is about to flash.
          */
         const val FADE_IN_DELAY_MS = 40L
+        /** Long enough for a quick swipe to be pilfered first; the colour still lands before [FADE_IN_DELAY_MS]. */
+        const val SAMPLE_DELAY_MS = 20L
         const val FADE_IN_MS = 100L
         /** How long after the replay starts our pill stays up. The real flash is about 30 ms. */
         const val PILL_DWELL_MS = 150L
