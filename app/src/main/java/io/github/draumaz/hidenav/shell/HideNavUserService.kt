@@ -66,6 +66,34 @@ class HideNavUserService : IHideNavService.Stub() {
     private var respawnDelayMs = RESPAWN_MIN_MS
     private val respawn = Runnable { respawnApp() }
 
+    init {
+        killOtherInstances()
+    }
+
+    /**
+     * Kills any older copy of this service. Each Shizuku server starts its own daemon, so if
+     * Shizuku ends up running twice (seen with Nightzuku after an OTA), the app talks to
+     * one daemon while the other keeps its own DISABLE_HOME record. The Circle to Search
+     * replay only lifts this daemon's record, so Launcher keeps refusing the long press.
+     * Killing the stale copy drops its binder token and with it the record. The app just
+     * bound this instance, so the newest one wins.
+     */
+    private fun killOtherInstances() {
+        val myPid = android.os.Process.myPid()
+        val myName = runCatching { processName(myPid) }.getOrNull()?.takeIf { it.isNotEmpty() } ?: return
+        java.io.File("/proc").listFiles()?.forEach { dir ->
+            val pid = dir.name.toIntOrNull() ?: return@forEach
+            if (pid == myPid) return@forEach
+            val name = runCatching { processName(pid) }.getOrNull() ?: return@forEach
+            if (name != myName) return@forEach
+            Log.w(TAG, "killing stale $name (pid $pid)")
+            android.os.Process.killProcess(pid)
+        }
+    }
+
+    private fun processName(pid: Int): String =
+        java.io.File("/proc/$pid/cmdline").readText().substringBefore('\u0000')
+
     override fun destroy() {
         runCatching { applyFlag(false) }
         exitProcess(0)
