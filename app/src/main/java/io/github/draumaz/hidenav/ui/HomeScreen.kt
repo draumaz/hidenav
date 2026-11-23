@@ -88,16 +88,13 @@ fun HomeScreen(bridge: ShellBridge, prefs: Prefs) {
     Surface(color = MaterialTheme.colorScheme.surfaceContainer, modifier = Modifier.fillMaxSize()) {
         // One scrolling page with the footer at the end. When everything fits, the page
         // still fills the screen so the footer sits at the bottom.
-        BoxWithConstraints(
-            Modifier
-                .fillMaxSize()
-                .statusBarsPadding()
-                .navigationBarsPadding(),
-        ) {
+        BoxWithConstraints(Modifier.fillMaxSize()) {
             Column(
                 Modifier
                     .verticalScroll(rememberScrollState())
                     .heightIn(min = maxHeight)
+                    .statusBarsPadding()
+                    .navigationBarsPadding()
                     .padding(horizontal = 16.dp),
                 verticalArrangement = Arrangement.SpaceBetween,
             ) {

@@ -17,6 +17,7 @@ import android.view.MotionEvent
 import io.github.draumaz.hidenav.IForegroundListener
 import io.github.draumaz.hidenav.IHideNavService
 import java.lang.reflect.Proxy
+import java.util.concurrent.TimeUnit
 import kotlin.system.exitProcess
 
 /**
@@ -163,7 +164,17 @@ class HideNavUserService : IHideNavService.Stub() {
     }
 
     private fun runShell(vararg cmd: String): Boolean = runCatching {
-        ProcessBuilder(*cmd).redirectErrorStream(true).start().waitFor() == 0
+        val process = ProcessBuilder(*cmd).redirectErrorStream(true).start()
+        try {
+            if (!process.waitFor(SHELL_TIMEOUT_S, TimeUnit.SECONDS)) {
+                process.destroyForcibly()
+                Log.w(TAG, "command timed out: ${cmd.joinToString(" ")}")
+                return@runCatching false
+            }
+            process.exitValue() == 0
+        } finally {
+            runCatching { process.inputStream.close() }
+        }
     }.getOrDefault(false)
 
     override fun sampleLuminance(left: Int, top: Int, right: Int, bottom: Int): Float = try {
@@ -219,6 +230,7 @@ class HideNavUserService : IHideNavService.Stub() {
         if (appToken !== token) return
         appToken = null
         appDeath = null
+        foregroundListener = null
         appDied = true
         // A process that ran a while was killed for memory; one that died straight after a
         // restart is probably crashing, so back off instead of restarting it in a loop.
@@ -454,6 +466,7 @@ class HideNavUserService : IHideNavService.Stub() {
         const val ACTIVITY_TYPE_HOME = 2
         const val ACTIVITY_TYPE_RECENTS = 3
         const val SHELL_PACKAGE = "com.android.shell"
+        const val SHELL_TIMEOUT_S = 5L
         const val KEEP_ALIVE_SERVICE = "io.github.draumaz.hidenav.KeepAliveService"
         const val RESPAWN_MIN_MS = 500L
         const val RESPAWN_MAX_MS = 5 * 60_000L

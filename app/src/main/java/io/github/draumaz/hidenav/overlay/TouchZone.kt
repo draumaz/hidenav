@@ -67,6 +67,8 @@ class TouchZone(
 
     fun show() {
         if (view != null) return
+        // Re-sync in case hide() cancelled a passThroughTap() restore while FLAG_NOT_TOUCHABLE was set.
+        applyTouchableFlag(interactive)
         val zone = ZoneView(context)
         try {
             windowManager.addView(zone, params)
@@ -142,12 +144,16 @@ class TouchZone(
         return if (id != 0) res.getDimensionPixelSize(id) else (24 * res.displayMetrics.density).roundToInt()
     }
 
-    private fun setTouchable(touchable: Boolean) {
+    private fun applyTouchableFlag(touchable: Boolean) {
         params.flags = if (touchable) {
             params.flags and WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE.inv()
         } else {
             params.flags or WindowManager.LayoutParams.FLAG_NOT_TOUCHABLE
         }
+    }
+
+    private fun setTouchable(touchable: Boolean) {
+        applyTouchableFlag(touchable)
         val zone = view ?: return
         runCatching { windowManager.updateViewLayout(zone, params) }
     }
@@ -202,15 +208,21 @@ class TouchZone(
             main.postDelayed(fadeOut, PILL_DWELL_MS)
         }
 
+        /** Incremented on every [cover]/[clear] so stale async colour samples are ignored. */
+        private var coverGen = 0
+
         fun cover() {
             cancelFades()
+            val gen = ++coverGen
             sampleColour(realPillShowing = true) {
+                if (gen != coverGen || view !== this) return@sampleColour
                 alpha = 1f
                 main.postDelayed(handOver, COVER_LEAD_MS)
             }
         }
 
         fun clear() {
+            coverGen++
             cancelFades()
             alpha = 0f
         }

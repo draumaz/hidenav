@@ -1,6 +1,7 @@
 package io.github.draumaz.hidenav
 
 import android.content.Context
+import androidx.core.content.edit
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -20,11 +21,11 @@ class Prefs(context: Context) {
 
     fun update(transform: (Settings) -> Settings) {
         val next = transform(_settings.value)
-        prefs.edit()
-            .putBoolean(KEY_HIDE, next.hidePill)
-            .putBoolean(KEY_CTS, next.keepCircleToSearch)
-            .putBoolean(KEY_SHOW_ON_HOME, next.showOnHome)
-            .apply()
+        prefs.edit {
+            putBoolean(KEY_HIDE, next.hidePill)
+            putBoolean(KEY_CTS, next.keepCircleToSearch)
+            putBoolean(KEY_SHOW_ON_HOME, next.showOnHome)
+        }
         _settings.value = next
     }
 
