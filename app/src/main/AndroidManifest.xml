@@ -4,6 +4,9 @@
     <!-- The Circle to Search touch zone. Granted through Shizuku, no settings trip needed. -->
     <uses-permission android:name="android.permission.SYSTEM_ALERT_WINDOW" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Keeps the process at perceptible priority even when the overlay is hidden (lock screen, secure apps). -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_SPECIAL_USE" />
 
     <!-- So "Not running" can open the Shizuku app to start it. -->
     <queries>
@@ -38,6 +41,17 @@
                 <action android:name="android.intent.action.MY_PACKAGE_REPLACED" />
             </intent-filter>
         </receiver>
+
+        <!-- Exported with INTERACT_ACROSS_USERS_FULL so the shell service can respawn it directly. -->
+        <service
+            android:name=".KeepAliveService"
+            android:exported="true"
+            android:foregroundServiceType="specialUse"
+            android:permission="android.permission.INTERACT_ACROSS_USERS_FULL">
+            <property
+                android:name="android.app.PROPERTY_SPECIAL_USE_FGS_SUBTYPE"
+                android:value="Keeps the gesture pill touch zone and foreground-app monitor alive while HideNav is active" />
+        </service>
 
         <!-- Shizuku (and forks like Nightzuku) deliver their binder through this provider. -->
         <provider

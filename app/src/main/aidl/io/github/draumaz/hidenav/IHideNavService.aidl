@@ -29,8 +29,14 @@ interface IHideNavService {
     // "show outside apps" setting. Reports the current state straight away.
     void setForegroundListener(IForegroundListener listener) = 7;
 
-    // Keeps the app's process coming back: if appToken's process dies (Android kills it
-    // freely while the lock screen hides the touch zone), the service restarts it in the
-    // background once the device is unlocked. With null, stops doing that.
+    // Keeps the app's process coming back: if appToken's process dies, the service
+    // restarts it in the background once the device is unlocked. With null, stops doing that.
     void watchApp(IBinder appToken, String packageName) = 8;
+
+    // Exempts the app from Doze / App Standby and background execution restrictions.
+    boolean grantBackgroundExemption(String packageName) = 9;
+
+    // Tells the service whether "show outside apps" is active so it can keep toggling the
+    // pill directly if the app process dies before it restarts.
+    void setShowOnHome(boolean enabled) = 10;
 }

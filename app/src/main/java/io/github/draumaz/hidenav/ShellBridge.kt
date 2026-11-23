@@ -46,10 +46,18 @@ class ShellBridge(private val context: Context, private val prefs: Prefs) {
     }
     /** The service [foregroundListener] is registered with, if any. */
     private var listeningTo: IHideNavService? = null
+    /** The last service we synced [IHideNavService.setShowOnHome] to, and the value sent. */
+    private var showOnHomeService: IHideNavService? = null
+    private var lastShowOnHome = false
     /** Handed to the service so it can tell when this process dies and restart it. */
     private val appToken = android.os.Binder()
     /** The service that's watching [appToken], if any. */
     private var watchedBy: IHideNavService? = null
+    /** Whether we've asked the current shell service to grant Doze / background exemption. */
+    private var exemptedBy: IHideNavService? = null
+    /** Whether the foreground keep-alive service should currently be running. */
+    @Volatile private var wantKeepAlive = false
+    private var keepAliveStarted = false
     /** Whether the pill should be hidden right now; checked again once [TouchZone.coverPill] is done. */
     private var wantHidden = false
     private var covering = false
@@ -98,7 +106,7 @@ class ShellBridge(private val context: Context, private val prefs: Prefs) {
 
     /** Re-reads Shizuku's state; called on binder events and whenever the UI resumes. */
     fun refresh() {
-        _state.value = when {
+        val next = when {
             !Shizuku.pingBinder() -> ShizukuState.NOT_RUNNING
             Shizuku.isPreV11() -> ShizukuState.UNSUPPORTED
             Shizuku.checkSelfPermission() != PackageManager.PERMISSION_GRANTED -> ShizukuState.NEEDS_PERMISSION
@@ -109,27 +117,48 @@ class ShellBridge(private val context: Context, private val prefs: Prefs) {
                 ShizukuState.CONNECTING
             }
         }
+        _state.value = next
+        if (next != ShizukuState.READY && next != ShizukuState.CONNECTING) {
+            stopKeepAlive()
+        }
     }
 
     private fun apply(service: IHideNavService?, settings: Settings, appInFront: Boolean) {
+        val showOnHome = settings.hidePill && settings.showOnHome
+        val needed = showOnHome || (settings.hidePill && settings.keepCircleToSearch)
+        if (!needed) {
+            stopKeepAlive()
+        }
         if (service == null) {
             listeningTo = null
+            showOnHomeService = null
             watchedBy = null
+            exemptedBy = null
             wantHidden = false
             touchZone.hide()
             return
         }
-        val showOnHome = settings.hidePill && settings.showOnHome
-        // This process only matters while it has the touch zone up. The overlay keeps it at
-        // perceptible priority, but the lock screen hides the overlay, and then Android
-        // kills it like any cached app. Have the service bring it back after unlock.
-        val needed = showOnHome || (settings.hidePill && settings.keepCircleToSearch)
+        // Keep the process alive with a special-use foreground service + battery exemption,
+        // and have the shell service respawn it if the system still kills it.
+        if (needed) {
+            wantKeepAlive = true
+            ensureKeepAlive(service)
+        }
         if (needed != (watchedBy === service)) {
             try {
                 service.watchApp(if (needed) appToken else null, context.packageName)
                 watchedBy = if (needed) service else null
             } catch (e: Exception) {
                 Log.w(TAG, "watchApp failed", e)
+            }
+        }
+        if (showOnHomeService !== service || lastShowOnHome != showOnHome) {
+            try {
+                service.setShowOnHome(showOnHome)
+                showOnHomeService = service
+                lastShowOnHome = showOnHome
+            } catch (e: Exception) {
+                Log.w(TAG, "setShowOnHome failed", e)
             }
         }
         if (showOnHome != (listeningTo === service)) {
@@ -182,6 +211,33 @@ class ShellBridge(private val context: Context, private val prefs: Prefs) {
         } catch (e: Exception) {
             Log.w(TAG, "setPillHidden failed", e)
         }
+    }
+
+    private fun ensureKeepAlive(service: IHideNavService) {
+        if (exemptedBy === service) {
+            if (!keepAliveStarted) {
+                keepAliveStarted = true
+                KeepAliveService.start(context)
+            }
+            return
+        }
+        exemptedBy = service
+        scope.launch(Dispatchers.IO) {
+            runCatching { service.grantBackgroundExemption(context.packageName) }
+                .onFailure { Log.w(TAG, "grantBackgroundExemption failed", it) }
+            main.post {
+                if (wantKeepAlive && !keepAliveStarted) {
+                    keepAliveStarted = true
+                    KeepAliveService.start(context)
+                }
+            }
+        }
+    }
+
+    private fun stopKeepAlive() {
+        wantKeepAlive = false
+        keepAliveStarted = false
+        KeepAliveService.stop(context)
     }
 
     private fun ensureOverlayPermission(service: IHideNavService): Boolean {

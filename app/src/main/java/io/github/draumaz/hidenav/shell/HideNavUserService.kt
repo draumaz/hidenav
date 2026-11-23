@@ -56,6 +56,7 @@ class HideNavUserService : IHideNavService.Stub() {
 
     // Only touched on [handler]'s thread.
     private var foregroundListener: IForegroundListener? = null
+    private var showOnHome = false
     private var reportedAppInFront: Boolean? = null
     private var watching = false
     private val recheck = Runnable {
@@ -68,10 +69,12 @@ class HideNavUserService : IHideNavService.Stub() {
     private var appDeath: IBinder.DeathRecipient? = null
     private var appPackage: String? = null
     private var appAttachedAt = 0L
-    /** The watched app's process died and hasn't been restarted yet. */
+    /** The watched app's process died and hasn't re-attached via [watchApp] yet. */
     private var appDied = false
     private var respawnDelayMs = RESPAWN_MIN_MS
     private val respawn = Runnable { respawnApp() }
+    /** Fires if a wake succeeded at the shell level but the app never called [watchApp] back. */
+    private val attachTimeout = Runnable { onAttachTimeout() }
 
     init {
         killOtherInstances()
@@ -142,9 +145,25 @@ class HideNavUserService : IHideNavService.Stub() {
         }, delayMs)
     }
 
-    override fun grantOverlayPermission(packageName: String): Boolean = runCatching {
-        ProcessBuilder("appops", "set", packageName, "SYSTEM_ALERT_WINDOW", "allow")
-            .redirectErrorStream(true).start().waitFor() == 0
+    override fun grantOverlayPermission(packageName: String): Boolean =
+        runShell("appops", "set", packageName, "SYSTEM_ALERT_WINDOW", "allow")
+
+    override fun grantBackgroundExemption(packageName: String): Boolean {
+        val idle = runShell("cmd", "deviceidle", "whitelist", "+$packageName")
+        val anyBg = runShell("appops", "set", packageName, "RUN_ANY_IN_BACKGROUND", "allow")
+        val bg = runShell("appops", "set", packageName, "RUN_IN_BACKGROUND", "allow")
+        return idle && anyBg && bg
+    }
+
+    override fun setShowOnHome(enabled: Boolean) {
+        handler.post {
+            showOnHome = enabled
+            if (enabled) startWatching()
+        }
+    }
+
+    private fun runShell(vararg cmd: String): Boolean = runCatching {
+        ProcessBuilder(*cmd).redirectErrorStream(true).start().waitFor() == 0
     }.getOrDefault(false)
 
     override fun sampleLuminance(left: Int, top: Int, right: Int, bottom: Int): Float = try {
@@ -177,6 +196,7 @@ class HideNavUserService : IHideNavService.Stub() {
             appDeath = null
             appDied = false
             handler.removeCallbacks(respawn)
+            handler.removeCallbacks(attachTimeout)
             if (appToken == null || packageName == null) {
                 appPackage = null
                 return@post
@@ -213,7 +233,7 @@ class HideNavUserService : IHideNavService.Stub() {
 
     /** Restarts the app after [respawnDelayMs], or waits for the next unlock (via [recheck]). */
     private fun scheduleRespawn() {
-        if (handler.hasCallbacks(respawn)) return
+        if (handler.hasCallbacks(respawn) || handler.hasCallbacks(attachTimeout)) return
         val locked = runCatching { isKeyguardLocked() }.getOrDefault(false)
         if (!locked) handler.postDelayed(respawn, respawnDelayMs)
     }
@@ -228,20 +248,26 @@ class HideNavUserService : IHideNavService.Stub() {
             appPackage = null
             return
         }
-        // Touching the app's Shizuku provider starts its process in the background, without
-        // an activity. The app then reconnects and calls watchApp again.
-        val ok = runCatching {
-            ProcessBuilder("content", "call", "--uri", "content://$pkg.shizuku", "--method", "hidenav_wake")
-                .redirectErrorStream(true).start().waitFor() == 0
-        }.getOrDefault(false)
+        // Start the foreground service directly so the respawned process immediately gets
+        // perceptible priority instead of starting cached. Fall back to waking the Shizuku
+        // provider if that fails.
+        val ok = runShell("am", "start-foreground-service", "-n", "$pkg/$KEEP_ALIVE_SERVICE") ||
+            runShell("content", "call", "--uri", "content://$pkg.shizuku", "--method", "hidenav_wake")
         Log.d(TAG, "restarted app: $ok")
         if (ok) {
-            appDied = false
-            appAttachedAt = SystemClock.elapsedRealtime()
+            // Keep appDied = true until watchApp() confirms the process actually reconnected.
+            handler.postDelayed(attachTimeout, ATTACH_TIMEOUT_MS)
         } else {
             respawnDelayMs = (respawnDelayMs * 2).coerceAtMost(RESPAWN_MAX_MS)
             scheduleRespawn()
         }
+    }
+
+    private fun onAttachTimeout() {
+        if (!appDied) return
+        Log.w(TAG, "app did not re-attach within $ATTACH_TIMEOUT_MS ms; retrying")
+        respawnDelayMs = (respawnDelayMs * 2).coerceAtMost(RESPAWN_MAX_MS)
+        scheduleRespawn()
     }
 
     private fun isForceStopped(pkg: String): Boolean = runCatching {
@@ -277,7 +303,8 @@ class HideNavUserService : IHideNavService.Stub() {
     }
 
     private fun checkForeground() {
-        val listener = foregroundListener ?: return
+        val listener = foregroundListener
+        if (listener == null && !showOnHome) return
         val appInFront = try {
             !isKeyguardLocked() && !isHomeInFront()
         } catch (t: Throwable) {
@@ -287,11 +314,21 @@ class HideNavUserService : IHideNavService.Stub() {
         if (appInFront == reportedAppInFront) return
         reportedAppInFront = appInFront
         Log.d(TAG, "appInFront=$appInFront")
-        try {
-            listener.onAppInFrontChanged(appInFront)
-        } catch (e: RemoteException) {
-            // The app's process is gone; it registers again when it comes back.
-            foregroundListener = null
+        if (listener != null) {
+            try {
+                listener.onAppInFrontChanged(appInFront)
+                return
+            } catch (e: RemoteException) {
+                // The app's process is gone; it registers again when it comes back.
+                foregroundListener = null
+            }
+        }
+        // App process is gone while "show outside apps" is on: toggle the flag directly
+        // (without the fade animation) so the pill never gets stuck in the wrong state.
+        if (showOnHome && hidden != appInFront) {
+            hidden = appInFront
+            runCatching { applyFlag(appInFront) }
+                .onFailure { Log.w(TAG, "fallback applyFlag failed", it) }
         }
     }
 
@@ -417,8 +454,11 @@ class HideNavUserService : IHideNavService.Stub() {
         const val ACTIVITY_TYPE_HOME = 2
         const val ACTIVITY_TYPE_RECENTS = 3
         const val SHELL_PACKAGE = "com.android.shell"
+        const val KEEP_ALIVE_SERVICE = "io.github.draumaz.hidenav.KeepAliveService"
         const val RESPAWN_MIN_MS = 500L
         const val RESPAWN_MAX_MS = 5 * 60_000L
+        /** How long to wait for a respawned app to call [watchApp] before retrying. */
+        const val ATTACH_TIMEOUT_MS = 10_000L
         /** An app process that lived this long wasn't crashing. */
         const val STABLE_MS = 60_000L
         /** StatusBarManager.DISABLE_HOME: Launcher fades the stashed handle out while it's set. */

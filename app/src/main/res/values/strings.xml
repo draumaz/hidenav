@@ -32,6 +32,10 @@
     <string name="note_cts_title">Circle to Search takes a moment longer</string>
     <string name="note_cts">With the pill hidden, Launcher ignores long presses, so HideNav replays one for it. Expect about two thirds of a second instead of half.</string>
 
+    <string name="notification_channel_name">Background service</string>
+    <string name="notification_title">HideNav is active</string>
+    <string name="notification_text">Keeping the gesture pill hidden</string>
+
     <string name="about_version" translatable="false">v%1$s</string>
     <string name="about_author">by %1$s</string>
 </resources>

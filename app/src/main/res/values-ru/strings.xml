@@ -30,5 +30,9 @@
     <string name="note_cts_title">«Обвести и найти» открывается чуть дольше</string>
     <string name="note_cts">Когда полоска скрыта, Launcher не реагирует на долгое нажатие, поэтому HideNav воспроизводит его за вас. Ждать придётся около двух третей секунды вместо половины.</string>
 
+    <string name="notification_channel_name">Фоновая служба</string>
+    <string name="notification_title">HideNav активен</string>
+    <string name="notification_text">Скрывает полоску жестов</string>
+
     <string name="about_author">автор: %1$s</string>
 </resources>
