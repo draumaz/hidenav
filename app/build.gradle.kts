@@ -5,7 +5,11 @@ plugins {
 
 android {
     namespace = "io.github.draumaz.hidenav"
-    compileSdk = 37
+    compileSdk {
+        version = release(37) {
+            minorApiLevel = 2
+        }
+    }
 
     defaultConfig {
         applicationId = "xyz.draumaz.hidenav"
